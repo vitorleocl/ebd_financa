@@ -10,7 +10,9 @@ import {
   createUserWithEmailAndPassword, 
   signOut,
   onAuthStateChanged,
-  User as FirebaseUser
+  User as FirebaseUser,
+  GoogleAuthProvider,
+  signInWithPopup
 } from "firebase/auth";
 import { 
   getFirestore, 
@@ -36,7 +38,9 @@ export {
   signInWithEmailAndPassword, 
   createUserWithEmailAndPassword, 
   signOut,
-  onAuthStateChanged
+  onAuthStateChanged,
+  GoogleAuthProvider,
+  signInWithPopup
 };
 export type { FirebaseUser };
 

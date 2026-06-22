@@ -9,7 +9,7 @@ import { User, BoxId, Transaction, WeeklyClosing as ClosingType, Person, UserRol
 import { 
   Lock, Landmark, ArrowLeftRight, PlusCircle, CalendarRange, 
   Users, BarChart3, History, LogOut, ShieldAlert, FileDown, FileUp, 
-  Menu, X, BookOpen, AlertCircle, ShieldCheck, Cloud
+  Menu, X, BookOpen, AlertCircle, ShieldCheck, Cloud, HelpCircle
 } from 'lucide-react';
 import { 
   auth, 
@@ -17,7 +17,9 @@ import {
   createUserWithEmailAndPassword, 
   signOut as firebaseSignOut,
   saveStateToFirestore,
-  loadStateFromFirestore
+  loadStateFromFirestore,
+  GoogleAuthProvider,
+  signInWithPopup
 } from './lib/firebase';
 
 // Import our modular subcomponents
@@ -59,6 +61,7 @@ export default function App() {
   // Google Authentication states
   const [showSimulationModal, setShowSimulationModal] = useState(false);
   const [showGoogleRoleModal, setShowGoogleRoleModal] = useState(false);
+  const [showGoogleConfigGuide, setShowGoogleConfigGuide] = useState(false);
   const [googleProfileData, setGoogleProfileData] = useState<{
     id: string;
     name: string;
@@ -145,128 +148,89 @@ export default function App() {
     }
   };
 
-  // Google Authentication GSI Integration
-  useEffect(() => {
-    const clientId = (import.meta as any).env.VITE_GOOGLE_CLIENT_ID;
-    if (clientId && (window as any).google?.accounts?.id) {
-      try {
-        (window as any).google.accounts.id.initialize({
-          client_id: clientId,
-          callback: (response: any) => {
-            const profile = decodeGoogleJwt(response.credential);
-            if (profile) {
-              setGoogleProfileData({
-                id: profile.sub || `g-${Date.now()}`,
-                name: profile.name,
-                email: profile.email,
-                picture: profile.picture || ''
-              });
-              setShowGoogleRoleModal(true);
-            }
-          }
-        });
-      } catch (err) {
-        console.error("Erro ao inicializar Google Sign-In SDK:", err);
-      }
-    }
-  }, [state.currentUser]);
-
-  // Decode GSI JWT ID Token helper
-  const decodeGoogleJwt = (token: string) => {
+  // Google Login click handler via Firebase Auth Popup
+  const handleGoogleLoginClick = async () => {
+    setLoginError(null);
     try {
-      const base64Url = token.split('.')[1];
-      const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
-      const jsonPayload = decodeURIComponent(atob(base64).split('').map(function(c) {
-          return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
-      }).join(''));
-      return JSON.parse(jsonPayload);
-    } catch (e) {
-      console.error("JWT Decode error", e);
-      return null;
-    }
-  };
-
-  // Google Login click handler
-  const handleGoogleLoginClick = () => {
-    const clientId = (import.meta as any).env.VITE_GOOGLE_CLIENT_ID;
-    if (clientId && (window as any).google?.accounts?.oauth2) {
-      try {
-        const client = (window as any).google.accounts.oauth2.initTokenClient({
-          client_id: clientId,
-          scope: 'email profile openid',
-          callback: async (response: any) => {
-            if (response && response.access_token) {
-              try {
-                const res = await fetch(`https://www.googleapis.com/oauth2/v3/userinfo?access_token=${response.access_token}`);
-                const profile = await res.json();
-                if (profile && profile.name) {
-                  setGoogleProfileData({
-                    id: profile.sub || `g-${Date.now()}`,
-                    name: profile.name,
-                    email: profile.email,
-                    picture: profile.picture || ''
-                  });
-                  setShowGoogleRoleModal(true);
-                }
-              } catch (err) {
-                console.error("Erro ao buscar dados do perfil Google:", err);
-                setShowSimulationModal(true);
-              }
-            }
-          }
+      const provider = new GoogleAuthProvider();
+      const result = await signInWithPopup(auth, provider);
+      const fbUser = result.user;
+      
+      if (fbUser) {
+        setGoogleProfileData({
+          id: `fb-${fbUser.uid}`,
+          name: fbUser.displayName || fbUser.email?.split('@')[0] || 'Membro Google',
+          email: fbUser.email || '',
+          picture: fbUser.photoURL || ''
         });
-        client.requestAccessToken();
-      } catch (err) {
-        console.error("Erro Google Token Client:", err);
-        setShowSimulationModal(true);
+        setShowGoogleRoleModal(true);
       }
-    } else {
-      setShowSimulationModal(true);
+    } catch (error: any) {
+      console.error("Erro Google Sign-In via Firebase:", error);
+      setLoginError(`Erro de Login Google: ${getFriendlyFirebaseError(error.code || error.message)}`);
     }
   };
 
-  const handleSimulateGoogleLogin = (name: string, role: UserRole, email: string) => {
-    setShowSimulationModal(false);
-    
-    const updatedState = { ...state };
-    updatedState.currentUser = {
-      id: `gsim-${Date.now()}`,
-      name: name,
-      username: email.split('@')[0],
-      role: role,
-      avatarColor: role === 'TESOUREIRO' ? 'bg-blue-600' : role === 'SECRETARIA' ? 'bg-indigo-600' : 'bg-emerald-600'
-    };
-
-    addAuditLog(updatedState, 'Login Google Simulado', `Acesso via simulador de conta Google (${email}) com permissão de ${role}.`, updatedState.currentUser);
-    setState(updatedState);
-    
-    if (role === 'SECRETARIA') {
-      setActiveTab('cadastro');
-    } else {
-      setActiveTab('dashboard');
-    }
-  };
-
-  const handleConfirmGoogleRole = (role: UserRole) => {
+  const handleConfirmGoogleRole = async (role: UserRole) => {
     if (!googleProfileData) return;
     
     setShowGoogleRoleModal(false);
     
     const updatedState = { ...state };
+    const rawUid = googleProfileData.id.replace('fb-', '');
+    
+    try {
+      const savedState = await loadStateFromFirestore(rawUid);
+      if (savedState) {
+        updatedState.boxes = savedState.boxes || updatedState.boxes;
+        updatedState.categories = savedState.categories || updatedState.categories;
+        updatedState.transactions = savedState.transactions || updatedState.transactions;
+        updatedState.people = savedState.people || updatedState.people;
+        updatedState.closings = savedState.closings || updatedState.closings;
+        updatedState.auditLogs = savedState.auditLogs || updatedState.auditLogs;
+        updatedState.users = savedState.users || updatedState.users;
+      }
+    } catch (err) {
+      console.error("Erro ao sincronizar dados do Google Firestore:", err);
+    }
+
+    const emailLower = googleProfileData.email.toLowerCase();
+    let assignedRole = role;
+    if (emailLower === 'vitorleonardoc@gmail.com' || emailLower === 'vitorleonardocl@gmail.com') {
+      assignedRole = 'MASTER';
+    }
+
     updatedState.currentUser = {
       id: googleProfileData.id,
       name: googleProfileData.name,
-      username: googleProfileData.email.split('@')[0],
-      role: role,
-      avatarColor: role === 'TESOUREIRO' ? 'bg-blue-600' : role === 'SECRETARIA' ? 'bg-indigo-600' : 'bg-emerald-600'
+      username: googleProfileData.email,
+      role: assignedRole,
+      avatarColor: assignedRole === 'MASTER' ? 'bg-indigo-900' : assignedRole === 'TESOUREIRO' ? 'bg-blue-600' : assignedRole === 'SECRETARIA' ? 'bg-indigo-600' : 'bg-emerald-600'
     };
 
-    addAuditLog(updatedState, 'Login Google Concluido', `Acesso autenticado via Google Sign-In (${googleProfileData.email}) associado ao perfil ${role}.`, updatedState.currentUser);
-    setState(updatedState);
+    const isAlreadyInList = updatedState.users.some(u => u.username.toLowerCase() === emailLower);
+    if (!isAlreadyInList) {
+      updatedState.users.push({
+        id: googleProfileData.id,
+        name: googleProfileData.name,
+        username: googleProfileData.email,
+        role: assignedRole,
+        avatarColor: assignedRole === 'MASTER' ? 'bg-indigo-900' : assignedRole === 'TESOUREIRO' ? 'bg-blue-600' : assignedRole === 'SECRETARIA' ? 'bg-indigo-600' : 'bg-emerald-600'
+      });
+    }
+
+    addAuditLog(updatedState, 'Login Google Concluido', `Acesso autenticado via Google Sign-In (${googleProfileData.email}) associado ao perfil ${assignedRole}.`, updatedState.currentUser);
     
+    try {
+      await saveStateToFirestore(rawUid, updatedState);
+    } catch (err) {
+      console.error("Erro ao salvar dados novos do Google no Firestore:", err);
+    }
+
+    setState(updatedState);
     setGoogleProfileData(null);
     
-    if (role === 'SECRETARIA') {
+    if (assignedRole === 'SECRETARIA') {
       setActiveTab('cadastro');
     } else {
       setActiveTab('dashboard');
@@ -476,6 +440,16 @@ export default function App() {
         return 'A senha fornecida é muito fraca (pelo menos 6 caracteres).';
       case 'auth/invalid-credential':
         return 'Credenciais de acesso incorretas ou expiradas.';
+      case 'auth/popup-closed-by-user':
+        return 'O popup de autenticação do Google foi fechado antes de concluir o acesso. Isso pode ocorrer caso você feche a janela ou se o Provedor Google não estiver ativo no console do seu Firebase.';
+      case 'auth/cancelled-popup-request':
+        return 'A janela popup foi fechada pois outra tentativa de acesso concorrente foi iniciada.';
+      case 'auth/operation-not-allowed':
+        return 'O login com Google não foi ativado no painel de seu projeto Firebase. Ative-o em "Authentication" > "Sign-in method" no console do Firebase.';
+      case 'auth/popup-blocked':
+        return 'O popup de login do Google foi bloqueado pelo seu navegador. Habilite a exibição de popups para este site.';
+      case 'auth/internal-error':
+        return 'Ocorreu um erro interno de criptografia do Firebase. Verifique se o Google console está associado corretamente.';
       default:
         return code;
     }
@@ -911,6 +885,35 @@ export default function App() {
               </svg>
               <span>Entrar com o Google</span>
             </button>
+
+            {/* Google Config Guide / Help */}
+            <div className="mt-3 text-center">
+              <button
+                type="button"
+                onClick={() => setShowGoogleConfigGuide(!showGoogleConfigGuide)}
+                className="text-[10px] text-indigo-600 hover:text-indigo-800 font-bold hover:underline inline-flex items-center gap-1 cursor-pointer transition-colors"
+                id="toggle-guide-btn"
+              >
+                <HelpCircle className="w-3.5 h-3.5" />
+                {showGoogleConfigGuide ? 'Ocultar instruções de configuração' : 'Dica: Como habilitar o Google no meu Firebase?'}
+              </button>
+            </div>
+
+            {showGoogleConfigGuide && (
+              <div className="mt-3 p-4 bg-indigo-50/50 border border-indigo-100 rounded-2xl text-[10px] text-slate-650 leading-relaxed font-semibold transition-all animate-fade-in space-y-2 text-left">
+                <p className="font-extrabold text-indigo-900 uppercase tracking-wider text-[9px] mb-1">Como Ativar o Google no Firebase Console:</p>
+                <ol className="list-decimal list-inside space-y-1.5 font-medium text-slate-700">
+                  <li>Acesse o <a href="https://console.firebase.google.com/" target="_blank" rel="noopener noreferrer" className="text-indigo-650 hover:underline font-bold">Firebase Console ↗</a> e selecione seu projeto.</li>
+                  <li>No painel lateral esquerdo, vá em <strong className="text-slate-800">Authentication</strong>.</li>
+                  <li>Selecione a aba <strong className="text-slate-800">Sign-in method</strong> e depois clique em <strong className="text-indigo-600">Adicionar Provedor</strong>.</li>
+                  <li>Escolha o provedor <strong className="text-slate-800">Google</strong>, ative a chave (habilitar) e insira o e-mail de suporte do seu projeto.</li>
+                  <li>Clique em <strong className="text-white bg-indigo-600 px-1.5 py-0.5 rounded text-[8px] font-bold">Salvar</strong>.</li>
+                </ol>
+                <div className="border-t border-slate-200/50 pt-2 text-[9px] text-slate-500 font-medium">
+                  <strong>Observação:</strong> O erro <code className="bg-slate-100 text-slate-600 p-0.5 px-1 font-mono rounded text-[8px]">popup-closed-by-user</code> ocorre principalmente se você fechar a janela antes de concluir ou se o painel do provedor Google não estiver ativado acima. Certifique-se de que nenhum bloqueador de popups do navegador esteja barrando a janela de seleção de conta do Google!
+                </div>
+              </div>
+            )}
 
             <div className="pt-4 border-t border-slate-100 flex items-center justify-between text-[10px] text-slate-400 font-semibold font-mono">
               <span className="flex items-center gap-1">
