@@ -5,40 +5,7 @@
 
 import { User, Box, Category, Transaction, Person, AuditLog, WeeklyClosing } from '../types';
 
-export const INITIAL_USERS: (User & { passwordHash: string })[] = [
-  {
-    id: 'usr1',
-    name: 'Amanda Souza',
-    username: 'secretaria',
-    role: 'SECRETARIA',
-    avatarColor: 'bg-indigo-600',
-    passwordHash: 'senha123'
-  },
-  {
-    id: 'usr2',
-    name: 'Pr. Carlos Mendes',
-    username: 'dirigente',
-    role: 'DIRIGENTE',
-    avatarColor: 'bg-emerald-600',
-    passwordHash: 'senha123'
-  },
-  {
-    id: 'usr3',
-    name: 'Marcos Oliveira',
-    username: 'tesoureiro',
-    role: 'TESOUREIRO',
-    avatarColor: 'bg-blue-600',
-    passwordHash: 'senha123'
-  },
-  {
-    id: 'usr4',
-    name: 'Visitante EBD',
-    username: 'visitante',
-    role: 'VISITANTE',
-    avatarColor: 'bg-slate-500',
-    passwordHash: 'senha123'
-  }
-];
+export const INITIAL_USERS: (User & { passwordHash: string })[] = [];
 
 export const INITIAL_BOXES: Box[] = [
   {

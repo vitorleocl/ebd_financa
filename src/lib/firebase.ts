@@ -41,19 +41,19 @@ export {
 export type { FirebaseUser };
 
 /**
- * Saves the entire application state (excluding currentUser session) to Firestore for the authenticated user.
+ * Saves the entire application state (excluding currentUser session) to Firestore for any authenticated user.
  */
 export async function saveStateToFirestore(userId: string, stateData: any) {
   try {
-    const userDocRef = doc(db, "ebd_states", userId);
-    // Delete sensitive credentials before saving state list
+    const userDocRef = doc(db, "ebd_states", "shared_church_ebd");
+    // Ensure currentUser is null so credentials/local sessions are kept local
     const stateToSave = {
       ...stateData,
-      currentUser: null, // Keep session local
+      currentUser: null,
       updatedAt: new Date().toISOString()
     };
     await setDoc(userDocRef, stateToSave);
-    console.log("State durably persisted to Google Firestore!");
+    console.log("State durably persisted to Google Firestore (shared_church_ebd)!");
   } catch (err) {
     console.error("Error saving state to Firestore:", err);
   }
@@ -64,7 +64,7 @@ export async function saveStateToFirestore(userId: string, stateData: any) {
  */
 export async function loadStateFromFirestore(userId: string) {
   try {
-    const userDocRef = doc(db, "ebd_states", userId);
+    const userDocRef = doc(db, "ebd_states", "shared_church_ebd");
     const docSnap = await getDoc(userDocRef);
     if (docSnap.exists()) {
       return docSnap.data();

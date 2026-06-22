@@ -28,11 +28,18 @@ import WeeklyClosing from './components/WeeklyClosing';
 import RegistrationManagement from './components/RegistrationManagement';
 import ReportsView from './components/ReportsView';
 import AuditoryView from './components/AuditoryView';
+import UsersManagement from './components/UsersManagement';
 import TransactionReceipt from './components/TransactionReceipt';
 import AtaWeeklyClosing from './components/AtaWeeklyClosing';
 
 export default function App() {
-  const [state, setState] = useState<AppState>(getInitialState);
+  const [state, setState] = useState<AppState>(() => {
+    const initial = getInitialState();
+    if (initial.users) {
+      initial.users = initial.users.filter(u => !['usr1', 'usr2', 'usr3', 'usr4'].includes(u.id));
+    }
+    return initial;
+  });
   
   // Login input fields
   const [usernameInput, setUsernameInput] = useState('');
@@ -40,7 +47,7 @@ export default function App() {
   const [loginError, setLoginError] = useState<string | null>(null);
 
   // Firebase Auth and Storage states
-  const [loginMethod, setLoginMethod] = useState<'LOCAL' | 'FIREBASE'>('LOCAL');
+  const [loginMethod, setLoginMethod] = useState<'LOCAL' | 'FIREBASE'>('FIREBASE');
   const [firebaseEmail, setFirebaseEmail] = useState('');
   const [firebasePassword, setFirebasePassword] = useState('');
   const [firebaseAuthMode, setFirebaseAuthMode] = useState<'LOGIN' | 'REGISTER'>('LOGIN');
@@ -316,27 +323,6 @@ export default function App() {
       
       const updatedState = { ...state };
       
-      // Look for custom user metadata stored in state, or default role based on email/auth.
-      let assignedRole: UserRole = 'DIRIGENTE'; // fallback
-      let userDisplayName = fbUser.displayName || fbUser.email?.split('@')[0] || 'Membro';
-      
-      if (savedState && savedState.currentUser) {
-        assignedRole = savedState.currentUser.role;
-        userDisplayName = savedState.currentUser.name;
-      } else {
-        // Look up by email conventions or use DIRIGENTE as standard demo role
-        if (fbUser.email?.includes('secretaria')) assignedRole = 'SECRETARIA';
-        else if (fbUser.email?.includes('tesouraria') || fbUser.email?.includes('tesoureiro')) assignedRole = 'TESOUREIRO';
-      }
-
-      updatedState.currentUser = {
-        id: `fb-${fbUser.uid}`,
-        name: userDisplayName,
-        username: fbUser.email || '',
-        role: assignedRole,
-        avatarColor: assignedRole === 'TESOUREIRO' ? 'bg-blue-600' : assignedRole === 'SECRETARIA' ? 'bg-indigo-600' : 'bg-emerald-600'
-      };
-
       if (savedState) {
         // Sync whole loaded collection
         updatedState.boxes = savedState.boxes || updatedState.boxes;
@@ -345,6 +331,50 @@ export default function App() {
         updatedState.people = savedState.people || updatedState.people;
         updatedState.closings = savedState.closings || updatedState.closings;
         updatedState.auditLogs = savedState.auditLogs || updatedState.auditLogs;
+        updatedState.users = savedState.users || updatedState.users;
+      }
+
+      // Look for custom user metadata stored in state, or default role based on email/auth.
+      let assignedRole: UserRole = 'DIRIGENTE'; // fallback
+      let userDisplayName = fbUser.displayName || fbUser.email?.split('@')[0] || 'Membro';
+      const emailLower = fbUser.email?.toLowerCase() || '';
+
+      if (emailLower === 'vitorleonardoc@gmail.com' || emailLower === 'vitorleonardocl@gmail.com') {
+        assignedRole = 'MASTER';
+        userDisplayName = 'Vitor Leonardo';
+      } else {
+        const registeredUser = updatedState.users.find(u => u.username.toLowerCase() === emailLower);
+        if (registeredUser) {
+          assignedRole = registeredUser.role;
+          userDisplayName = registeredUser.name;
+        } else if (savedState && savedState.currentUser) {
+          assignedRole = savedState.currentUser.role;
+          userDisplayName = savedState.currentUser.name;
+        } else {
+          // Look up by email conventions or use DIRIGENTE as standard role
+          if (fbUser.email?.includes('secretaria')) assignedRole = 'SECRETARIA';
+          else if (fbUser.email?.includes('tesouraria') || fbUser.email?.includes('tesoureiro')) assignedRole = 'TESOUREIRO';
+        }
+      }
+
+      updatedState.currentUser = {
+        id: `fb-${fbUser.uid}`,
+        name: userDisplayName,
+        username: fbUser.email || '',
+        role: assignedRole,
+        avatarColor: assignedRole === 'MASTER' ? 'bg-indigo-900' : assignedRole === 'TESOUREIRO' ? 'bg-blue-600' : assignedRole === 'SECRETARIA' ? 'bg-indigo-600' : 'bg-emerald-600'
+      };
+
+      // Safeguard email is present in users array
+      const hasSelfInUsers = updatedState.users.some(u => u.username.toLowerCase() === emailLower);
+      if (!hasSelfInUsers) {
+        updatedState.users.push({
+          id: `fb-${fbUser.uid}`,
+          name: userDisplayName,
+          username: fbUser.email || '',
+          role: assignedRole,
+          avatarColor: assignedRole === 'MASTER' ? 'bg-indigo-900' : assignedRole === 'TESOUREIRO' ? 'bg-blue-600' : assignedRole === 'SECRETARIA' ? 'bg-indigo-600' : 'bg-emerald-600'
+        });
       }
 
       addAuditLog(updatedState, 'Login Firebase', `Usuário ${userDisplayName} autenticado via Firebase Auth (${fbUser.email}).`, updatedState.currentUser);
@@ -379,33 +409,41 @@ export default function App() {
       
       const updatedState = { ...state };
       
+      const emailLower = firebaseEmail.toLowerCase();
+      let assignedRole = firebaseRole;
+      if (emailLower === 'vitorleonardoc@gmail.com' || emailLower === 'vitorleonardocl@gmail.com') {
+        assignedRole = 'MASTER';
+      }
+
       // Store user object session
       updatedState.currentUser = {
         id: `fb-${fbUser.uid}`,
         name: firebaseName,
         username: firebaseEmail,
-        role: firebaseRole,
-        avatarColor: firebaseRole === 'TESOUREIRO' ? 'bg-blue-600' : firebaseRole === 'SECRETARIA' ? 'bg-indigo-600' : 'bg-emerald-600'
+        role: assignedRole,
+        avatarColor: assignedRole === 'MASTER' ? 'bg-indigo-900' : assignedRole === 'TESOUREIRO' ? 'bg-blue-600' : assignedRole === 'SECRETARIA' ? 'bg-indigo-600' : 'bg-emerald-600'
       };
 
       // Also register this user into our local system user directory
-      const isAlreadyInList = updatedState.users.push({
-        id: `fb-${fbUser.uid}`,
-        name: firebaseName,
-        username: firebaseEmail,
-        passwordHash: '[autenticado-via-firebase]',
-        role: firebaseRole,
-        avatarColor: firebaseRole === 'TESOUREIRO' ? 'bg-blue-600' : firebaseRole === 'SECRETARIA' ? 'bg-indigo-600' : 'bg-emerald-600'
-      });
+      const isAlreadyInList = updatedState.users.some(u => u.username.toLowerCase() === emailLower);
+      if (!isAlreadyInList) {
+        updatedState.users.push({
+          id: `fb-${fbUser.uid}`,
+          name: firebaseName,
+          username: firebaseEmail,
+          role: assignedRole,
+          avatarColor: assignedRole === 'MASTER' ? 'bg-indigo-900' : assignedRole === 'TESOUREIRO' ? 'bg-blue-600' : assignedRole === 'SECRETARIA' ? 'bg-indigo-600' : 'bg-emerald-600'
+        });
+      }
 
-      addAuditLog(updatedState, 'Registro Firebase', `Nova conta efetuada no Firebase Auth para ${firebaseName} (${firebaseEmail}) com cargo ${firebaseRole}.`, updatedState.currentUser);
+      addAuditLog(updatedState, 'Registro Firebase', `Nova conta efetuada no Firebase Auth para ${firebaseName} (${firebaseEmail}) com cargo ${assignedRole}.`, updatedState.currentUser);
       
       // Save this initial state mapping immediately
       await saveStateToFirestore(fbUser.uid, updatedState);
       
       setState(updatedState);
       
-      if (firebaseRole === 'SECRETARIA') {
+      if (assignedRole === 'SECRETARIA') {
         setActiveTab('cadastro');
       } else {
         setActiveTab('dashboard');
@@ -730,74 +768,8 @@ export default function App() {
               </div>
             )}
 
-            {/* Segmented Control */}
-            <div className="grid grid-cols-2 p-1 bg-slate-100/80 rounded-xl text-[10px] font-bold uppercase no-print">
-              <button
-                type="button"
-                onClick={() => { setLoginMethod('LOCAL'); setLoginError(null); }}
-                className={`py-2 px-2 text-center rounded-lg transition-all cursor-pointer ${
-                  loginMethod === 'LOCAL' 
-                    ? 'bg-white text-slate-800 shadow-sm' 
-                    : 'text-slate-500 hover:text-slate-800'
-                }`}
-              >
-                Acesso Local
-              </button>
-              <button
-                type="button"
-                onClick={() => { setLoginMethod('FIREBASE'); setLoginError(null); }}
-                className={`py-2 px-2 text-center rounded-lg transition-all flex items-center justify-center gap-1 cursor-pointer ${
-                  loginMethod === 'FIREBASE' 
-                    ? 'bg-indigo-600 text-white shadow-sm' 
-                    : 'text-slate-500 hover:text-indigo-600'
-                }`}
-              >
-                <Cloud className="w-3.5 h-3.5" />
-                Firebase Real
-              </button>
-            </div>
-
-            {loginMethod === 'LOCAL' ? (
-              <form onSubmit={handleLoginSubmit} className="space-y-4 font-semibold text-xs">
-                <div className="space-y-1.5">
-                  <label className="text-slate-600 uppercase tracking-widest block font-bold text-[10px]">Usuário de Acesso</label>
-                  <div className="relative">
-                    <input
-                      type="text"
-                      required
-                      value={usernameInput}
-                      onChange={(e) => setUsernameInput(e.target.value)}
-                      placeholder="secretaria, dirigente ou tesoureiro"
-                      className="block w-full border border-slate-200 rounded-xl p-3 sm:text-xs text-slate-800 outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 font-medium"
-                    />
-                  </div>
-                </div>
-
-                <div className="space-y-1.5">
-                  <label className="text-slate-600 uppercase tracking-widest block font-bold text-[10px]">Senha de Segurança</label>
-                  <div className="relative">
-                    <input
-                      type="password"
-                      required
-                      value={passwordInput}
-                      onChange={(e) => setPasswordInput(e.target.value)}
-                      placeholder="Digite a senha de 8 dígitos (padrão: senha123)"
-                      className="block w-full border border-slate-200 rounded-xl p-3 sm:text-xs text-slate-800 outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 font-medium"
-                    />
-                  </div>
-                </div>
-
-                <button
-                  type="submit"
-                  className="w-full bg-slate-900 hover:bg-slate-800 border border-slate-800 text-white rounded-xl py-3.5 text-center font-bold text-xs shadow-md shadow-gray-200 transition-all cursor-pointer active:scale-[0.98] mt-2"
-                  id="login-btn"
-                >
-                  Ingressar na Sessão EBD
-                </button>
-              </form>
-            ) : (
-              /* Firebase Auth section */
-              <div className="space-y-4 font-semibold text-xs animate-fade-in">
+            {/* Firebase Auth section */}
+            <div className="space-y-4 font-semibold text-xs animate-fade-in">
                 {/* Firebase form mode toggle */}
                 <div className="flex items-center justify-between border-b border-slate-100 pb-2 text-[9px] text-slate-400 font-bold uppercase">
                   <span>Modo Firebase</span>
@@ -914,7 +886,6 @@ export default function App() {
                   </form>
                 )}
               </div>
-            )}
 
             {/* Google Divider */}
             <div className="relative my-4">
@@ -948,79 +919,8 @@ export default function App() {
               </span>
               <span>v1.2.0 • Versão de Avaliação</span>
             </div>
-
           </div>
         </div>
-
-        {/* Visual Component: Simulation Modal overlay */}
-        {showSimulationModal && (
-          <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-            <div className="bg-white rounded-3xl border border-slate-100 shadow-2xl p-6 max-w-sm w-full space-y-4 animate-slide-in">
-              <div className="text-center space-y-2">
-                <div className="w-12 h-12 bg-indigo-50 border border-indigo-100 text-indigo-650 rounded-full flex items-center justify-center mx-auto">
-                  <svg className="w-5 h-5 shrink-0" viewBox="0 0 48 48">
-                    <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/>
-                    <path fill="#4285F4" d="M46.5 24c0-1.63-.15-3.21-.42-4.75H24v9h12.75c-.55 2.87-2.18 5.31-4.62 6.95l7.2 5.58C43.5 36.54 46.5 30.77 46.5 24z"/>
-                    <path fill="#FBBC05" d="M10.54 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.98-6.19z"/>
-                    <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.2-5.58c-2 .35-4.55 2.11-8.69 2.11-6.26 0-11.57-4.22-13.46-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/>
-                  </svg>
-                </div>
-                <h4 className="font-extrabold text-sm text-slate-800 tracking-tight">Simulador de Login Google</h4>
-                <p className="text-[11px] text-slate-400 leading-normal">
-                  Como não há Client ID configurado no seu arquivo de configuração <code className="bg-slate-50 border border-slate-100 p-0.5 px-1 font-mono rounded">.env</code> para esta sessão, selecione qual conta cadastrada você deseja simular via Google para experimentar o sistema:
-                </p>
-              </div>
-
-              <div className="space-y-2 text-xs">
-                <button
-                  type="button"
-                  onClick={() => handleSimulateGoogleLogin('Marcos Oliveira (Google)', 'TESOUREIRO', 'marcos.ebd@gmail.com')}
-                  className="w-full text-left p-3.5 border border-slate-100 hover:border-indigo-200 bg-slate-50 hover:bg-slate-50/20 rounded-2xl flex items-center gap-3 transition-all cursor-pointer"
-                >
-                  <span className="w-2.5 h-2.5 rounded-full bg-blue-500 shrink-0" />
-                  <div className="flex-1 font-semibold text-slate-805">
-                    <span className="block font-bold">Marcos Oliveira</span>
-                    <span className="text-[10px] text-slate-400 block font-normal">marcos.ebd@gmail.com • Tesoureiro</span>
-                  </div>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => handleSimulateGoogleLogin('Amanda Souza (Google)', 'SECRETARIA', 'amanda.ebd@gmail.com')}
-                  className="w-full text-left p-3.5 border border-slate-100 hover:border-indigo-200 bg-slate-50 hover:bg-slate-50/20 rounded-2xl flex items-center gap-3 transition-all cursor-pointer"
-                >
-                  <span className="w-2.5 h-2.5 rounded-full bg-indigo-500 shrink-0" />
-                  <div className="flex-1 font-semibold text-slate-805">
-                    <span className="block font-bold">Amanda Souza</span>
-                    <span className="text-[10px] text-slate-400 block font-normal">amanda.ebd@gmail.com • Secretária</span>
-                  </div>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => handleSimulateGoogleLogin('Pr. Carlos Mendes (Google)', 'DIRIGENTE', 'carlos.ebd@gmail.com')}
-                  className="w-full text-left p-3.5 border border-slate-100 hover:border-indigo-200 bg-slate-50 hover:bg-slate-50/20 rounded-2xl flex items-center gap-3 transition-all cursor-pointer"
-                >
-                  <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 shrink-0" />
-                  <div className="flex-1 font-semibold text-slate-805">
-                    <span className="block font-bold">Pr. Carlos Mendes</span>
-                    <span className="text-[10px] text-slate-400 block font-normal">carlos.ebd@gmail.com • Dirigente</span>
-                  </div>
-                </button>
-              </div>
-
-              <div className="pt-2">
-                <button
-                  type="button"
-                  onClick={() => setShowSimulationModal(false)}
-                  className="w-full py-2 border border-slate-200 hover:bg-slate-50 text-slate-500 rounded-xl font-bold text-xs cursor-pointer text-center"
-                >
-                  Cancelar
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
 
         {/* Visual Component: Real Google Sign-in Role Selection Modal */}
         {showGoogleRoleModal && googleProfileData && (
@@ -1190,6 +1090,19 @@ export default function App() {
                 <History className="w-3.5 h-3.5" />
                 Auditoria
               </button>
+
+              {user.role === 'MASTER' && (
+                <button
+                  onClick={() => setActiveTab('usuarios')}
+                  className={`px-3 py-2 rounded-xl transition-all flex items-center gap-1 ${
+                    activeTab === 'usuarios' ? 'bg-slate-800 text-indigo-300' : 'text-slate-350 hover:bg-slate-800 hover:text-white'
+                  }`}
+                  id="tab-users-mgmt"
+                >
+                  <Users className="w-3.5 h-3.5" />
+                  Usuários
+                </button>
+              )}
             </div>
 
             {/* Profile details & Backup features */}
@@ -1311,6 +1224,15 @@ export default function App() {
               Auditoria
             </button>
 
+            {user.role === 'MASTER' && (
+              <button
+                onClick={() => { setActiveTab('usuarios'); setMobileMenuOpen(false); }}
+                className={`block w-full text-left py-2 px-3 rounded-lg ${activeTab === 'usuarios' ? 'bg-slate-800 text-indigo-300' : 'text-slate-300'}`}
+              >
+                Gerenciar Usuários
+              </button>
+            )}
+
             <div className="border-t border-slate-700 pt-3 flex flex-col gap-2">
               <div className="text-[10px] text-slate-400">Usuário: {user.name} ({user.role})</div>
               
@@ -1410,6 +1332,22 @@ export default function App() {
 
           {activeTab === 'auditoria' && (
             <AuditoryView logs={state.auditLogs} />
+          )}
+
+          {activeTab === 'usuarios' && user.role === 'MASTER' && (
+            <UsersManagement
+              users={state.users}
+              currentUser={user}
+              onUpdateUsersList={(updatedUsers) => {
+                const updatedState = { ...state, users: updatedUsers };
+                setState(updatedState);
+              }}
+              onLogAudit={(action, details) => {
+                const updatedState = { ...state };
+                addAuditLog(updatedState, action, details, user);
+                setState(updatedState);
+              }}
+            />
           )}
 
         </div>
