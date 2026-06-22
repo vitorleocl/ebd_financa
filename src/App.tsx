@@ -194,9 +194,13 @@ export default function App() {
       console.error("Erro ao sincronizar dados do Google Firestore:", err);
     }
 
-    const emailLower = googleProfileData.email.toLowerCase();
+    const emailLower = googleProfileData.email.toLowerCase().trim();
     let assignedRole = role;
-    if (emailLower === 'vitorleonardoc@gmail.com' || emailLower === 'vitorleonardocl@gmail.com') {
+    if (
+      emailLower === 'vitorleonardoc@gmail.com' || 
+      emailLower === 'vitorleonardocl@gmail.com' || 
+      emailLower === 'vitorleonardocl@gmail.com.br'
+    ) {
       assignedRole = 'MASTER';
     }
 
@@ -208,7 +212,7 @@ export default function App() {
       avatarColor: assignedRole === 'MASTER' ? 'bg-indigo-900' : assignedRole === 'TESOUREIRO' ? 'bg-blue-600' : assignedRole === 'SECRETARIA' ? 'bg-indigo-600' : 'bg-emerald-600'
     };
 
-    const isAlreadyInList = updatedState.users.some(u => u.username.toLowerCase() === emailLower);
+    const isAlreadyInList = updatedState.users.some(u => u.username.toLowerCase().trim() === emailLower);
     if (!isAlreadyInList) {
       updatedState.users.push({
         id: googleProfileData.id,
@@ -221,11 +225,10 @@ export default function App() {
 
     addAuditLog(updatedState, 'Login Google Concluido', `Acesso autenticado via Google Sign-In (${googleProfileData.email}) associado ao perfil ${assignedRole}.`, updatedState.currentUser);
     
-    try {
-      await saveStateToFirestore(rawUid, updatedState);
-    } catch (err) {
+    // Save to Firestore in a background promise so the UI transitions instantly and login never hangs
+    saveStateToFirestore(rawUid, updatedState).catch(err => {
       console.error("Erro ao salvar dados novos do Google no Firestore:", err);
-    }
+    });
 
     setState(updatedState);
     setGoogleProfileData(null);
@@ -301,9 +304,13 @@ export default function App() {
       // Look for custom user metadata stored in state, or default role based on email/auth.
       let assignedRole: UserRole = 'DIRIGENTE'; // fallback
       let userDisplayName = fbUser.displayName || fbUser.email?.split('@')[0] || 'Membro';
-      const emailLower = fbUser.email?.toLowerCase() || '';
+      const emailLower = fbUser.email?.toLowerCase().trim() || '';
 
-      if (emailLower === 'vitorleonardoc@gmail.com' || emailLower === 'vitorleonardocl@gmail.com') {
+      if (
+        emailLower === 'vitorleonardoc@gmail.com' || 
+        emailLower === 'vitorleonardocl@gmail.com' || 
+        emailLower === 'vitorleonardocl@gmail.com.br'
+      ) {
         assignedRole = 'MASTER';
         userDisplayName = 'Vitor Leonardo';
       } else {
@@ -373,9 +380,13 @@ export default function App() {
       
       const updatedState = { ...state };
       
-      const emailLower = firebaseEmail.toLowerCase();
+      const emailLower = firebaseEmail.toLowerCase().trim();
       let assignedRole = firebaseRole;
-      if (emailLower === 'vitorleonardoc@gmail.com' || emailLower === 'vitorleonardocl@gmail.com') {
+      if (
+        emailLower === 'vitorleonardoc@gmail.com' || 
+        emailLower === 'vitorleonardocl@gmail.com' || 
+        emailLower === 'vitorleonardocl@gmail.com.br'
+      ) {
         assignedRole = 'MASTER';
       }
 

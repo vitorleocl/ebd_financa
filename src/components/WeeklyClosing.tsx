@@ -212,7 +212,7 @@ export default function WeeklyClosing({
 
           <div className="pt-6 border-t border-slate-50 mt-6 text-right">
             {!showClosingForm ? (
-              currentUser?.role === 'TESOUREIRO' ? (
+              (currentUser?.role === 'TESOUREIRO' || currentUser?.role === 'MASTER') ? (
                 <button
                   onClick={() => setShowClosingForm(true)}
                   className="py-2.5 px-5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs shadow-sm shadow-indigo-200 transition-all cursor-pointer active:scale-95"
@@ -222,7 +222,7 @@ export default function WeeklyClosing({
               ) : (
                 <p className="inline-flex items-center gap-1.5 text-xs text-amber-700 bg-amber-50 border border-amber-100 rounded-xl py-2.5 px-4">
                   <ShieldAlert className="w-4 h-4 shrink-0" />
-                  Somente usuários com o perfil de <strong>Tesoureiro</strong> podem formular fechamentos financeiros.
+                  Somente usuários com o perfil de <strong>Tesoureiro ou Master</strong> podem formular fechamentos financeiros.
                 </p>
               )
             ) : null}
@@ -356,7 +356,7 @@ export default function WeeklyClosing({
                           Ata
                         </button>
 
-                        {!isApproved && currentUser?.role === 'DIRIGENTE' && onApproveClosing && (
+                        {!isApproved && (currentUser?.role === 'DIRIGENTE' || currentUser?.role === 'MASTER') && onApproveClosing && (
                           <button
                             onClick={() => onApproveClosing(close.id)}
                             className="py-1 px-2.5 rounded bg-emerald-600 hover:bg-emerald-700 text-white font-bold flex items-center gap-1"

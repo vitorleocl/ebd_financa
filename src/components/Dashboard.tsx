@@ -330,7 +330,7 @@ export default function Dashboard({
                         Voucher
                       </button>
 
-                      {currentUser?.role === 'DIRIGENTE' && onApproveTransaction ? (
+                      {(currentUser?.role === 'DIRIGENTE' || currentUser?.role === 'MASTER') && onApproveTransaction ? (
                         <button
                           onClick={() => onApproveTransaction(t.id)}
                           className="py-1 px-2.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-[10px] flex items-center gap-1 shadow-sm transition-transform active:scale-95"
@@ -339,8 +339,8 @@ export default function Dashboard({
                           Aprovar
                         </button>
                       ) : (
-                        currentUser?.role !== 'DIRIGENTE' && (
-                          <div className="flex items-center gap-1 text-[10px] bg-slate-200/50 text-slate-500 border border-slate-200 px-2 py-1 rounded" title="Apenas o perfil Dirigente pode validar">
+                        (currentUser?.role !== 'DIRIGENTE' && currentUser?.role !== 'MASTER') && (
+                          <div className="flex items-center gap-1 text-[10px] bg-slate-200/50 text-slate-500 border border-slate-200 px-2 py-1 rounded" title="Apenas o perfil Dirigente ou Master pode validar">
                             <Lock className="w-3 h-3 shrink-0" />
                             Aguardando
                           </div>
