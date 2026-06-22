@@ -731,13 +731,36 @@ export default function App() {
         <div className="absolute bottom-0 left-0 w-96 h-96 bg-indigo-100/50 rounded-full blur-3xl -ml-32 -mb-32 pointer-events-none" />
 
         <div className="sm:mx-auto sm:w-full sm:max-w-md text-center z-10 space-y-4">
-          <div className="w-16 h-16 bg-slate-900 text-white rounded-3xl mx-auto flex items-center justify-center font-extrabold tracking-tight text-xl shadow-lg border border-slate-800">
-            EBD
+          <div className="flex flex-col items-center justify-center">
+            <img 
+              src="/imagem.png" 
+              alt="Logo Escola Bíblica Dominical" 
+              className="h-28 w-auto object-contain drop-shadow-sm mb-1"
+              referrerPolicy="no-referrer"
+              onLoad={(e) => {
+                const fallback = document.getElementById('login-logo-fallback');
+                if (fallback) fallback.style.display = 'none';
+              }}
+              onError={(e) => {
+                e.currentTarget.style.display = 'none';
+                const fallback = document.getElementById('login-logo-fallback');
+                if (fallback) fallback.style.display = 'flex';
+              }}
+            />
+            <div 
+              id="login-logo-fallback"
+              className="w-16 h-16 bg-slate-900 text-white rounded-3xl flex items-center justify-center font-extrabold tracking-tight text-xl shadow-lg border border-slate-800"
+            >
+              EBD
+            </div>
           </div>
           <div>
             <h2 className="text-2xl font-black text-slate-800 tracking-tight">Finanças EBD</h2>
-            <p className="mt-1.5 text-xs text-slate-400 font-semibold max-w-sm mx-auto leading-relaxed">
-              Sistema de Gestão Financeira Integrada para a Escola Bíblica Dominical.
+            <p className="mt-2 text-xs text-slate-500 font-semibold max-w-sm mx-auto leading-relaxed">
+              Sistema de Gestão Financeira Integrada para a Escola Bíblica Dominical
+              <span className="block text-indigo-600 font-bold mt-1 uppercase tracking-wider text-[10px]">
+                IEADALPE Jardim Paulista Baixo Polo
+              </span>
             </p>
           </div>
         </div>
@@ -1043,12 +1066,32 @@ export default function App() {
             
             {/* Logo area */}
             <div className="flex items-center gap-3">
-              <div className="w-8 h-8 rounded-xl bg-white text-slate-900 flex items-center justify-center font-black text-sm">
+              <img 
+                src="/imagem.png" 
+                alt="Logo EBD" 
+                className="h-9 w-auto object-contain drop-shadow-sm shrink-0"
+                referrerPolicy="no-referrer"
+                onLoad={() => {
+                  const fallback = document.getElementById('header-logo-fallback');
+                  if (fallback) fallback.style.display = 'none';
+                }}
+                onError={(e) => {
+                  e.currentTarget.style.display = 'none';
+                  const fallback = document.getElementById('header-logo-fallback');
+                  if (fallback) fallback.style.display = 'flex';
+                }}
+              />
+              <div 
+                id="header-logo-fallback"
+                className="w-8 h-8 rounded-xl bg-white text-slate-900 flex items-center justify-center font-black text-sm shrink-0"
+              >
                 E
               </div>
               <div>
                 <h1 className="font-extrabold text-sm tracking-tight leading-none block">Finanças EBD</h1>
-                <span className="text-[9px] text-indigo-300 font-bold uppercase tracking-widest block mt-0.5">Gestão de Caixas</span>
+                <span className="text-[9px] text-indigo-300 font-bold uppercase tracking-widest block mt-0.5">
+                  IEADALPE Jardim Paulista Baixo Polo
+                </span>
               </div>
             </div>
 
