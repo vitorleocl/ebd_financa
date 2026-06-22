@@ -9,8 +9,16 @@ import { User, BoxId, Transaction, WeeklyClosing as ClosingType, Person, UserRol
 import { 
   Lock, Landmark, ArrowLeftRight, PlusCircle, CalendarRange, 
   Users, BarChart3, History, LogOut, ShieldAlert, FileDown, FileUp, 
-  Menu, X, BookOpen, AlertCircle, ShieldCheck
+  Menu, X, BookOpen, AlertCircle, ShieldCheck, Cloud
 } from 'lucide-react';
+import { 
+  auth, 
+  signInWithEmailAndPassword, 
+  createUserWithEmailAndPassword, 
+  signOut as firebaseSignOut,
+  saveStateToFirestore,
+  loadStateFromFirestore
+} from './lib/firebase';
 
 // Import our modular subcomponents
 import Dashboard from './components/Dashboard';
@@ -30,6 +38,16 @@ export default function App() {
   const [usernameInput, setUsernameInput] = useState('');
   const [passwordInput, setPasswordInput] = useState('');
   const [loginError, setLoginError] = useState<string | null>(null);
+
+  // Firebase Auth and Storage states
+  const [loginMethod, setLoginMethod] = useState<'LOCAL' | 'FIREBASE'>('LOCAL');
+  const [firebaseEmail, setFirebaseEmail] = useState('');
+  const [firebasePassword, setFirebasePassword] = useState('');
+  const [firebaseAuthMode, setFirebaseAuthMode] = useState<'LOGIN' | 'REGISTER'>('LOGIN');
+  const [firebaseRole, setFirebaseRole] = useState<UserRole>('SECRETARIA');
+  const [firebaseName, setFirebaseName] = useState('');
+  const [syncingFirestore, setSyncingFirestore] = useState(false);
+  const [lastSyncedTime, setLastSyncedTime] = useState<string | null>(null);
 
   // Google Authentication states
   const [showSimulationModal, setShowSimulationModal] = useState(false);
@@ -53,6 +71,33 @@ export default function App() {
   useEffect(() => {
     saveState(state);
   }, [state]);
+
+  // Sync state changes durably to Google Firestore if a Firebase User is logged in
+  useEffect(() => {
+    if (state.currentUser && state.currentUser.id.startsWith('fb-')) {
+      const fbUserId = state.currentUser.id.replace('fb-', '');
+      setSyncingFirestore(true);
+      const timer = setTimeout(() => {
+        saveStateToFirestore(fbUserId, state)
+          .then(() => {
+            setLastSyncedTime(new Date().toLocaleTimeString());
+          })
+          .catch(e => console.error("Erro ao sincronizar com Firestore:", e))
+          .finally(() => {
+            setSyncingFirestore(false);
+          });
+      }, 800); // debounce saves to prevent spamming
+      return () => clearTimeout(timer);
+    }
+  }, [
+    state.transactions, 
+    state.boxes, 
+    state.closings, 
+    state.people, 
+    state.categories, 
+    state.auditLogs, 
+    state.currentUser?.id
+  ]);
 
   // Handle local system backups
   const handleDownloadBackup = () => {
@@ -258,16 +303,164 @@ export default function App() {
     }
   };
 
+  // Firebase Auth integration handlers
+  const handleFirebaseLogin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoginError(null);
+    try {
+      const userCredential = await signInWithEmailAndPassword(auth, firebaseEmail, firebasePassword);
+      const fbUser = userCredential.user;
+      
+      // Load their previously synced state from Firestore or stick to local if empty
+      const savedState = await loadStateFromFirestore(fbUser.uid);
+      
+      const updatedState = { ...state };
+      
+      // Look for custom user metadata stored in state, or default role based on email/auth.
+      let assignedRole: UserRole = 'DIRIGENTE'; // fallback
+      let userDisplayName = fbUser.displayName || fbUser.email?.split('@')[0] || 'Membro';
+      
+      if (savedState && savedState.currentUser) {
+        assignedRole = savedState.currentUser.role;
+        userDisplayName = savedState.currentUser.name;
+      } else {
+        // Look up by email conventions or use DIRIGENTE as standard demo role
+        if (fbUser.email?.includes('secretaria')) assignedRole = 'SECRETARIA';
+        else if (fbUser.email?.includes('tesouraria') || fbUser.email?.includes('tesoureiro')) assignedRole = 'TESOUREIRO';
+      }
+
+      updatedState.currentUser = {
+        id: `fb-${fbUser.uid}`,
+        name: userDisplayName,
+        username: fbUser.email || '',
+        role: assignedRole,
+        avatarColor: assignedRole === 'TESOUREIRO' ? 'bg-blue-600' : assignedRole === 'SECRETARIA' ? 'bg-indigo-600' : 'bg-emerald-600'
+      };
+
+      if (savedState) {
+        // Sync whole loaded collection
+        updatedState.boxes = savedState.boxes || updatedState.boxes;
+        updatedState.categories = savedState.categories || updatedState.categories;
+        updatedState.transactions = savedState.transactions || updatedState.transactions;
+        updatedState.people = savedState.people || updatedState.people;
+        updatedState.closings = savedState.closings || updatedState.closings;
+        updatedState.auditLogs = savedState.auditLogs || updatedState.auditLogs;
+      }
+
+      addAuditLog(updatedState, 'Login Firebase', `Usuário ${userDisplayName} autenticado via Firebase Auth (${fbUser.email}).`, updatedState.currentUser);
+      setState(updatedState);
+      
+      if (assignedRole === 'SECRETARIA') {
+        setActiveTab('cadastro');
+      } else {
+        setActiveTab('dashboard');
+      }
+      
+      setFirebaseEmail('');
+      setFirebasePassword('');
+    } catch (error: any) {
+      console.error(error);
+      setLoginError(`Erro de Autenticação Firebase: ${getFriendlyFirebaseError(error.code || error.message)}`);
+    }
+  };
+
+  const handleFirebaseRegister = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoginError(null);
+    
+    if (!firebaseEmail || !firebasePassword || !firebaseName) {
+      setLoginError("Por favor, preencha todos os campos para se registrar no Firebase.");
+      return;
+    }
+
+    try {
+      const userCredential = await createUserWithEmailAndPassword(auth, firebaseEmail, firebasePassword);
+      const fbUser = userCredential.user;
+      
+      const updatedState = { ...state };
+      
+      // Store user object session
+      updatedState.currentUser = {
+        id: `fb-${fbUser.uid}`,
+        name: firebaseName,
+        username: firebaseEmail,
+        role: firebaseRole,
+        avatarColor: firebaseRole === 'TESOUREIRO' ? 'bg-blue-600' : firebaseRole === 'SECRETARIA' ? 'bg-indigo-600' : 'bg-emerald-600'
+      };
+
+      // Also register this user into our local system user directory
+      const isAlreadyInList = updatedState.users.push({
+        id: `fb-${fbUser.uid}`,
+        name: firebaseName,
+        username: firebaseEmail,
+        passwordHash: '[autenticado-via-firebase]',
+        role: firebaseRole,
+        avatarColor: firebaseRole === 'TESOUREIRO' ? 'bg-blue-600' : firebaseRole === 'SECRETARIA' ? 'bg-indigo-600' : 'bg-emerald-600'
+      });
+
+      addAuditLog(updatedState, 'Registro Firebase', `Nova conta efetuada no Firebase Auth para ${firebaseName} (${firebaseEmail}) com cargo ${firebaseRole}.`, updatedState.currentUser);
+      
+      // Save this initial state mapping immediately
+      await saveStateToFirestore(fbUser.uid, updatedState);
+      
+      setState(updatedState);
+      
+      if (firebaseRole === 'SECRETARIA') {
+        setActiveTab('cadastro');
+      } else {
+        setActiveTab('dashboard');
+      }
+
+      // Reset fields
+      setFirebaseEmail('');
+      setFirebasePassword('');
+      setFirebaseName('');
+      setFirebaseAuthMode('LOGIN');
+    } catch (error: any) {
+      console.error(error);
+      setLoginError(`Erro de Registro Firebase: ${getFriendlyFirebaseError(error.code || error.message)}`);
+    }
+  };
+
+  const getFriendlyFirebaseError = (code: string) => {
+    switch (code) {
+      case 'auth/invalid-email':
+        return 'O endereço de e-mail fornecido é inválido.';
+      case 'auth/user-disabled':
+        return 'Este usuário foi desativado.';
+      case 'auth/user-not-found':
+        return 'Nenhum usuário correspondente encontrado.';
+      case 'auth/wrong-password':
+        return 'Senha incorreta fornecida.';
+      case 'auth/email-already-in-use':
+        return 'O e-mail fornecido já está em uso por outra conta.';
+      case 'auth/weak-password':
+        return 'A senha fornecida é muito fraca (pelo menos 6 caracteres).';
+      case 'auth/invalid-credential':
+        return 'Credenciais de acesso incorretas ou expiradas.';
+      default:
+        return code;
+    }
+  };
+
   // Logout handler
   const handleLogout = () => {
     const updatedState = { ...state };
     if (updatedState.currentUser) {
       addAuditLog(updatedState, 'Logout de Usuario', `Usuario ${updatedState.currentUser.name} encerrou a sessao.`);
     }
+
+    // Sign out from Firebase Auth if logged in
+    if (state.currentUser?.id.startsWith('fb-')) {
+      firebaseSignOut(auth).catch(e => console.error("Erro logout Firebase:", e));
+    }
+
     updatedState.currentUser = null;
     setState(updatedState);
     setUsernameInput('');
     setPasswordInput('');
+    setFirebaseEmail('');
+    setFirebasePassword('');
     setMobileMenuOpen(false);
   };
 
@@ -537,43 +730,191 @@ export default function App() {
               </div>
             )}
 
-            <form onSubmit={handleLoginSubmit} className="space-y-4 font-semibold text-xs">
-              <div className="space-y-1.5">
-                <label className="text-slate-600 uppercase tracking-widest block">Usuário de Acesso</label>
-                <div className="relative">
-                  <input
-                    type="text"
-                    required
-                    value={usernameInput}
-                    onChange={(e) => setUsernameInput(e.target.value)}
-                    placeholder="secretaria, dirigente ou tesoureiro"
-                    className="block w-full border border-slate-200 rounded-xl p-3 sm:text-xs text-slate-800 outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 font-medium"
-                  />
-                </div>
-              </div>
-
-              <div className="space-y-1.5">
-                <label className="text-slate-600 uppercase tracking-widest block font-bold">Senha de Segurança</label>
-                <div className="relative">
-                  <input
-                    type="password"
-                    required
-                    value={passwordInput}
-                    onChange={(e) => setPasswordInput(e.target.value)}
-                    placeholder="Digite a senha de 8 dígitos (padrão: senha123)"
-                    className="block w-full border border-slate-200 rounded-xl p-3 sm:text-xs text-slate-800 outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 font-medium"
-                  />
-                </div>
-              </div>
-
+            {/* Segmented Control */}
+            <div className="grid grid-cols-2 p-1 bg-slate-100/80 rounded-xl text-[10px] font-bold uppercase no-print">
               <button
-                type="submit"
-                className="w-full bg-slate-900 hover:bg-slate-800 border border-slate-800 text-white rounded-xl py-3.5 text-center font-bold text-xs shadow-md shadow-gray-200 transition-all cursor-pointer active:scale-[0.98] mt-2"
-                id="login-btn"
+                type="button"
+                onClick={() => { setLoginMethod('LOCAL'); setLoginError(null); }}
+                className={`py-2 px-2 text-center rounded-lg transition-all cursor-pointer ${
+                  loginMethod === 'LOCAL' 
+                    ? 'bg-white text-slate-800 shadow-sm' 
+                    : 'text-slate-500 hover:text-slate-800'
+                }`}
               >
-                Ingressar na Sessão EBD
+                Acesso Local
               </button>
-            </form>
+              <button
+                type="button"
+                onClick={() => { setLoginMethod('FIREBASE'); setLoginError(null); }}
+                className={`py-2 px-2 text-center rounded-lg transition-all flex items-center justify-center gap-1 cursor-pointer ${
+                  loginMethod === 'FIREBASE' 
+                    ? 'bg-indigo-600 text-white shadow-sm' 
+                    : 'text-slate-500 hover:text-indigo-600'
+                }`}
+              >
+                <Cloud className="w-3.5 h-3.5" />
+                Firebase Real
+              </button>
+            </div>
+
+            {loginMethod === 'LOCAL' ? (
+              <form onSubmit={handleLoginSubmit} className="space-y-4 font-semibold text-xs">
+                <div className="space-y-1.5">
+                  <label className="text-slate-600 uppercase tracking-widest block font-bold text-[10px]">Usuário de Acesso</label>
+                  <div className="relative">
+                    <input
+                      type="text"
+                      required
+                      value={usernameInput}
+                      onChange={(e) => setUsernameInput(e.target.value)}
+                      placeholder="secretaria, dirigente ou tesoureiro"
+                      className="block w-full border border-slate-200 rounded-xl p-3 sm:text-xs text-slate-800 outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 font-medium"
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-slate-600 uppercase tracking-widest block font-bold text-[10px]">Senha de Segurança</label>
+                  <div className="relative">
+                    <input
+                      type="password"
+                      required
+                      value={passwordInput}
+                      onChange={(e) => setPasswordInput(e.target.value)}
+                      placeholder="Digite a senha de 8 dígitos (padrão: senha123)"
+                      className="block w-full border border-slate-200 rounded-xl p-3 sm:text-xs text-slate-800 outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 font-medium"
+                    />
+                  </div>
+                </div>
+
+                <button
+                  type="submit"
+                  className="w-full bg-slate-900 hover:bg-slate-800 border border-slate-800 text-white rounded-xl py-3.5 text-center font-bold text-xs shadow-md shadow-gray-200 transition-all cursor-pointer active:scale-[0.98] mt-2"
+                  id="login-btn"
+                >
+                  Ingressar na Sessão EBD
+                </button>
+              </form>
+            ) : (
+              /* Firebase Auth section */
+              <div className="space-y-4 font-semibold text-xs animate-fade-in">
+                {/* Firebase form mode toggle */}
+                <div className="flex items-center justify-between border-b border-slate-100 pb-2 text-[9px] text-slate-400 font-bold uppercase">
+                  <span>Modo Firebase</span>
+                  <div className="flex gap-3">
+                    <button 
+                      type="button"
+                      onClick={() => { setFirebaseAuthMode('LOGIN'); setLoginError(null); }}
+                      className={`hover:text-indigo-600 transition-colors cursor-pointer ${firebaseAuthMode === 'LOGIN' ? 'text-indigo-600 font-black border-b border-indigo-600 pb-0.5' : ''}`}
+                    >
+                      Login
+                    </button>
+                    <button 
+                      type="button"
+                      onClick={() => { setFirebaseAuthMode('REGISTER'); setLoginError(null); }}
+                      className={`hover:text-indigo-600 transition-colors cursor-pointer ${firebaseAuthMode === 'REGISTER' ? 'text-indigo-600 font-black border-b border-indigo-600 pb-0.5' : ''}`}
+                    >
+                      Registrar
+                    </button>
+                  </div>
+                </div>
+
+                {firebaseAuthMode === 'LOGIN' ? (
+                  <form onSubmit={handleFirebaseLogin} className="space-y-4">
+                    <div className="space-y-1.5">
+                      <label className="text-slate-600 uppercase tracking-widest block text-[10px]">E-mail Firebase</label>
+                      <input
+                        type="email"
+                        required
+                        value={firebaseEmail}
+                        onChange={(e) => setFirebaseEmail(e.target.value)}
+                        placeholder="seu-email@dominio.com"
+                        className="block w-full border border-slate-200 rounded-xl p-3 sm:text-xs text-slate-800 outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 font-medium"
+                      />
+                    </div>
+
+                    <div className="space-y-1.5">
+                      <label className="text-slate-650 uppercase tracking-widest block text-[10px]">Senha Firebase</label>
+                      <input
+                        type="password"
+                        required
+                        value={firebasePassword}
+                        onChange={(e) => setFirebasePassword(e.target.value)}
+                        placeholder="Mínimo de 6 caracteres"
+                        className="block w-full border border-slate-200 rounded-xl p-3 sm:text-xs text-slate-800 outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 font-medium"
+                      />
+                    </div>
+
+                    <button
+                      type="submit"
+                      className="w-full bg-indigo-600 hover:bg-indigo-700 border border-indigo-600 text-white rounded-xl py-3.5 text-center font-bold text-xs shadow-md shadow-indigo-100 transition-all cursor-pointer active:scale-[0.98] mt-2 flex items-center justify-center gap-1.5"
+                    >
+                      <Cloud className="w-4 h-4" />
+                      Acessar com Firebase
+                    </button>
+                  </form>
+                ) : (
+                  <form onSubmit={handleFirebaseRegister} className="space-y-3.5">
+                    <div className="space-y-1.5">
+                      <label className="text-slate-600 uppercase tracking-widest block text-[10px]">Nome Completo</label>
+                      <input
+                        type="text"
+                        required
+                        value={firebaseName}
+                        onChange={(e) => setFirebaseName(e.target.value)}
+                        placeholder="Seu nome completo"
+                        className="block w-full border border-slate-200 rounded-xl p-3 sm:text-xs text-slate-800 outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 font-medium"
+                      />
+                    </div>
+
+                    <div className="space-y-1.5">
+                      <label className="text-slate-600 uppercase tracking-widest block text-[10px]">E-mail de Registro</label>
+                      <input
+                        type="email"
+                        required
+                        value={firebaseEmail}
+                        onChange={(e) => setFirebaseEmail(e.target.value)}
+                        placeholder="seu-email@dominio.com"
+                        className="block w-full border border-slate-200 rounded-xl p-3 sm:text-xs text-slate-800 outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 font-medium"
+                      />
+                    </div>
+
+                    <div className="space-y-1.5">
+                      <label className="text-slate-600 uppercase tracking-widest block text-[10px]">Senha de Acesso</label>
+                      <input
+                        type="password"
+                        required
+                        value={firebasePassword}
+                        onChange={(e) => setFirebasePassword(e.target.value)}
+                        placeholder="Mínimo 6 caracteres"
+                        className="block w-full border border-slate-200 rounded-xl p-3 sm:text-xs text-slate-800 outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 font-medium"
+                      />
+                    </div>
+
+                    <div className="space-y-1.5">
+                      <label className="text-slate-600 uppercase tracking-widest block text-[10px]">Cargo Executivo EBD</label>
+                      <select
+                        value={firebaseRole}
+                        onChange={(e) => setFirebaseRole(e.target.value as UserRole)}
+                        className="block w-full border border-slate-200 rounded-xl p-3 sm:text-xs text-slate-800 outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 font-bold"
+                      >
+                        <option value="SECRETARIA">Secretária (Cadastros & Fluxos)</option>
+                        <option value="TESOUREIRO">Tesoureiro (Saldos & Fechamento)</option>
+                        <option value="DIRIGENTE">Dirigente (Auditoria Geral)</option>
+                      </select>
+                    </div>
+
+                    <button
+                      type="submit"
+                      className="w-full bg-indigo-600 hover:bg-indigo-700 border border-indigo-600 text-white rounded-xl py-3 text-center font-bold text-xs shadow-md transition-all cursor-pointer active:scale-[0.98] mt-2 flex items-center justify-center gap-1.5"
+                    >
+                      <PlusCircle className="w-4 h-4 animation-pulse" />
+                      Criar Conta Firebase
+                    </button>
+                  </form>
+                )}
+              </div>
+            )}
 
             {/* Google Divider */}
             <div className="relative my-4">
@@ -863,6 +1204,13 @@ export default function App() {
               
               {/* Database sync and download backup row */}
               <div className="flex items-center gap-1.5">
+                {user.id.startsWith('fb-') && (
+                  <div className="flex items-center gap-1.5 text-[9px] font-bold font-mono uppercase px-2.5 py-1 bg-indigo-500/10 text-indigo-300 border border-indigo-500/20 rounded-md">
+                    <Cloud className={`w-3 h-3 ${syncingFirestore ? 'animate-bounce text-indigo-400' : 'text-emerald-400'}`} />
+                    <span>{syncingFirestore ? 'Salvando...' : lastSyncedTime ? `Nuvem Ok (${lastSyncedTime})` : 'Nuvem Ativa'}</span>
+                  </div>
+                )}
+
                 <button
                   type="button"
                   onClick={handleDownloadBackup}
