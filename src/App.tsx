@@ -900,17 +900,39 @@ export default function App() {
             </div>
 
             {showGoogleConfigGuide && (
-              <div className="mt-3 p-4 bg-indigo-50/50 border border-indigo-100 rounded-2xl text-[10px] text-slate-650 leading-relaxed font-semibold transition-all animate-fade-in space-y-2 text-left">
-                <p className="font-extrabold text-indigo-900 uppercase tracking-wider text-[9px] mb-1">Como Ativar o Google no Firebase Console:</p>
-                <ol className="list-decimal list-inside space-y-1.5 font-medium text-slate-700">
-                  <li>Acesse o <a href="https://console.firebase.google.com/" target="_blank" rel="noopener noreferrer" className="text-indigo-650 hover:underline font-bold">Firebase Console ↗</a> e selecione seu projeto.</li>
-                  <li>No painel lateral esquerdo, vá em <strong className="text-slate-800">Authentication</strong>.</li>
-                  <li>Selecione a aba <strong className="text-slate-800">Sign-in method</strong> e depois clique em <strong className="text-indigo-600">Adicionar Provedor</strong>.</li>
-                  <li>Escolha o provedor <strong className="text-slate-800">Google</strong>, ative a chave (habilitar) e insira o e-mail de suporte do seu projeto.</li>
-                  <li>Clique em <strong className="text-white bg-indigo-600 px-1.5 py-0.5 rounded text-[8px] font-bold">Salvar</strong>.</li>
-                </ol>
-                <div className="border-t border-slate-200/50 pt-2 text-[9px] text-slate-500 font-medium">
-                  <strong>Observação:</strong> O erro <code className="bg-slate-100 text-slate-600 p-0.5 px-1 font-mono rounded text-[8px]">popup-closed-by-user</code> ocorre principalmente se você fechar a janela antes de concluir ou se o painel do provedor Google não estiver ativado acima. Certifique-se de que nenhum bloqueador de popups do navegador esteja barrando a janela de seleção de conta do Google!
+              <div className="mt-3 p-4 bg-indigo-50/50 border border-indigo-100 rounded-2xl text-[10px] text-slate-650 leading-relaxed font-semibold transition-all animate-fade-in space-y-3 text-left">
+                <div>
+                  <p className="font-extrabold text-indigo-900 uppercase tracking-wider text-[9px] mb-1">1. Liberar Domínio de Acesso (Corrige "auth/unauthorized-domain"):</p>
+                  <p className="font-medium text-slate-750 mb-1">O Firebase exige a homologação de quais domínios podem iniciar a autenticação por popup.</p>
+                  <ol className="list-decimal list-inside space-y-1 font-medium text-slate-700">
+                    <li>Acesse o <a href="https://console.firebase.google.com/" target="_blank" rel="noopener noreferrer" className="text-indigo-650 hover:underline font-bold">Firebase Console ↗</a> e abra o projeto <strong className="text-slate-800">financas-ebd</strong>.</li>
+                    <li>No menu lateral esquerdo, vá em <strong className="text-slate-800">Authentication</strong>.</li>
+                    <li>Clique na aba <strong className="text-slate-850">Settings</strong> (Configurações) no topo.</li>
+                    <li>No menu esquerdo que aparecerá, selecione <strong className="text-slate-850">Authorized domains</strong> (Domínios autorizados).</li>
+                    <li>Clique em <strong className="text-indigo-600">Add domain</strong> (Adicionar domínio) e registre os seguintes domínios do seu applet:
+                      <ul className="list-disc list-inside ml-4 mt-1 text-slate-600 space-y-0.5 font-mono text-[9px]">
+                        <li>ais-dev-yg7iuqllq2nwibcqkxsu43-520053391223.us-east1.run.app</li>
+                        <li>ais-pre-yg7iuqllq2nwibcqkxsu43-520053391223.us-east1.run.app</li>
+                      </ul>
+                    </li>
+                  </ol>
+                </div>
+
+                <div className="border-t border-slate-200/50 pt-2">
+                  <p className="font-extrabold text-indigo-900 uppercase tracking-wider text-[9px] mb-1">2. Vincular seu Firebase financas-ebd ao Código:</p>
+                  <p className="font-medium text-slate-755 mb-1.5">Configure as variáveis de ambiente das credenciais Web do seu Firebase no menu <strong className="text-slate-800">Settings</strong> do AI Studio (ou em seu arquivo <code className="bg-slate-100 px-1 py-0.5 rounded text-[8px] font-mono font-bold">.env</code>):</p>
+                  <ul className="space-y-1 font-mono text-[9px] text-slate-600 bg-slate-100/60 p-2 rounded-xl border border-slate-200/40">
+                    <li>VITE_FIREBASE_API_KEY=<span className="text-indigo-600 font-bold">&lt;Sua_ApiKey_Web&gt;</span></li>
+                    <li>VITE_FIREBASE_AUTH_DOMAIN=financas-ebd.firebaseapp.com</li>
+                    <li>VITE_FIREBASE_PROJECT_ID=financas-ebd</li>
+                    <li>VITE_FIREBASE_STORAGE_BUCKET=financas-ebd.firebasestorage.app</li>
+                    <li>VITE_FIREBASE_MESSAGING_SENDER_ID=<span className="text-indigo-600 font-bold">&lt;Seu_Sender_ID&gt;</span></li>
+                    <li>VITE_FIREBASE_APP_ID=<span className="text-indigo-600 font-bold">&lt;Seu_App_ID_Web&gt;</span></li>
+                  </ul>
+                </div>
+
+                <div className="border-t border-slate-200/50 pt-2 text-[8px] text-slate-500 font-medium">
+                  <strong>Nota:</strong> Ative também o provedor de login <strong className="text-slate-700">Google</strong> na aba "Sign-in method" em seu console do Firebase se ainda não tiver feito!
                 </div>
               </div>
             )}
