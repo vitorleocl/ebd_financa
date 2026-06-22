@@ -27,7 +27,6 @@ import Dashboard from './components/Dashboard';
 import BoxesManagement from './components/BoxesManagement';
 import TransactionForm from './components/TransactionForm';
 import WeeklyClosing from './components/WeeklyClosing';
-import RegistrationManagement from './components/RegistrationManagement';
 import ReportsView from './components/ReportsView';
 import AuditoryView from './components/AuditoryView';
 import UsersManagement from './components/UsersManagement';
@@ -1097,16 +1096,6 @@ export default function App() {
               </button>
 
               <button
-                onClick={() => setActiveTab('cadastro')}
-                className={`px-3 py-2 rounded-xl transition-all ${
-                  activeTab === 'cadastro' ? 'bg-slate-800 text-indigo-300' : 'text-slate-350 hover:bg-slate-800 hover:text-white'
-                }`}
-                id="tab-registries"
-              >
-                Alunos & Visitantes
-              </button>
-
-              <button
                 onClick={() => setActiveTab('relatorios')}
                 className={`px-3 py-2 rounded-xl transition-all ${
                   activeTab === 'relatorios' ? 'bg-slate-800 text-indigo-300' : 'text-slate-350 hover:bg-slate-800 hover:text-white'
@@ -1240,13 +1229,6 @@ export default function App() {
             </button>
 
             <button
-              onClick={() => { setActiveTab('cadastro'); setMobileMenuOpen(false); }}
-              className={`block w-full text-left py-2 px-3 rounded-lg ${activeTab === 'cadastro' ? 'bg-slate-800 text-indigo-300' : 'text-slate-300'}`}
-            >
-              Alunos & Visitantes
-            </button>
-
-            <button
               onClick={() => { setActiveTab('relatorios'); setMobileMenuOpen(false); }}
               className={`block w-full text-left py-2 px-3 rounded-lg ${activeTab === 'relatorios' ? 'bg-slate-800 text-indigo-300' : 'text-slate-300'}`}
             >
@@ -1346,14 +1328,6 @@ export default function App() {
               onViewAta={(closing) => setActiveAta(closing)}
               onAddClosing={handleAddClosing}
               onApproveClosing={handleApproveClosing}
-            />
-          )}
-
-          {activeTab === 'cadastro' && (
-            <RegistrationManagement
-              people={state.people}
-              currentUser={user}
-              onAddPerson={handleAddPerson}
             />
           )}
 
