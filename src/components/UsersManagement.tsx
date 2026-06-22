@@ -23,7 +23,7 @@ export default function UsersManagement({
   const [showAddForm, setShowAddForm] = useState(false);
   const [newName, setNewName] = useState('');
   const [newEmail, setNewEmail] = useState('');
-  const [newRole, setNewRole] = useState<UserRole>('SECRETARIA');
+  const [newRole, setNewRole] = useState<UserRole>('VISITANTE');
   const [formError, setFormError] = useState<string | null>(null);
 
   // Start editing a user
@@ -53,7 +53,7 @@ export default function UsersManagement({
           ...u,
           name: editName.trim(),
           role: editRole,
-          avatarColor: editRole === 'MASTER' ? 'bg-indigo-900' : editRole === 'TESOUREIRO' ? 'bg-blue-600' : editRole === 'SECRETARIA' ? 'bg-indigo-600' : 'bg-emerald-600'
+          avatarColor: editRole === 'MASTER' ? 'bg-indigo-900' : editRole === 'TESOUREIRO' ? 'bg-blue-600' : editRole === 'SECRETARIA' ? 'bg-indigo-600' : editRole === 'DIRIGENTE' ? 'bg-emerald-600' : 'bg-slate-500'
         };
       }
       return u;
@@ -110,7 +110,7 @@ export default function UsersManagement({
       name: nameClean,
       username: emailClean,
       role: newRole,
-      avatarColor: newRole === 'MASTER' ? 'bg-indigo-900' : newRole === 'TESOUREIRO' ? 'bg-blue-600' : newRole === 'SECRETARIA' ? 'bg-indigo-600' : 'bg-emerald-600'
+      avatarColor: newRole === 'MASTER' ? 'bg-indigo-900' : newRole === 'TESOUREIRO' ? 'bg-blue-600' : newRole === 'SECRETARIA' ? 'bg-indigo-600' : newRole === 'DIRIGENTE' ? 'bg-emerald-600' : 'bg-slate-500'
     };
 
     const updated = [newUser, ...users];
@@ -123,7 +123,7 @@ export default function UsersManagement({
     // Reset form
     setNewName('');
     setNewEmail('');
-    setNewRole('SECRETARIA');
+    setNewRole('VISITANTE');
     setShowAddForm(false);
   };
 
@@ -220,6 +220,7 @@ export default function UsersManagement({
                 onChange={(e) => setNewRole(e.target.value as UserRole)}
                 className="block w-full border border-slate-250 bg-white rounded-xl p-2.5 text-xs text-slate-800 font-bold outline-none focus:ring-2 focus:ring-indigo-500/20"
               >
+                <option value="VISITANTE">Visitante (Sem Permissão de Leitura ou Gravação)</option>
                 <option value="SECRETARIA">Secretária (Lançamentos & Cadastros)</option>
                 <option value="TESOUREIRO">Tesoureiro (Saldos & Fechamento)</option>
                 <option value="DIRIGENTE">Dirigente (Vistos & Auditoria Geral)</option>

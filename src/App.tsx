@@ -19,7 +19,8 @@ import {
   saveStateToFirestore,
   loadStateFromFirestore,
   GoogleAuthProvider,
-  signInWithPopup
+  signInWithPopup,
+  onAuthStateChanged
 } from './lib/firebase';
 
 // Import our modular subcomponents
@@ -80,6 +81,64 @@ export default function App() {
   useEffect(() => {
     saveState(state);
   }, [state]);
+
+  // Synchronize active authentication state changes and roles
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, async (fbUser) => {
+      if (fbUser) {
+        try {
+          const savedState = await loadStateFromFirestore(fbUser.uid);
+          if (savedState) {
+            setState(current => {
+              const updatedState = { ...current };
+              updatedState.boxes = savedState.boxes || updatedState.boxes;
+              updatedState.categories = savedState.categories || updatedState.categories;
+              updatedState.transactions = savedState.transactions || updatedState.transactions;
+              updatedState.people = savedState.people || updatedState.people;
+              updatedState.closings = savedState.closings || updatedState.closings;
+              updatedState.auditLogs = savedState.auditLogs || updatedState.auditLogs;
+              updatedState.users = savedState.users || updatedState.users;
+
+              // Check if currently authenticated user email's role has changed in the user list
+              const emailLower = fbUser.email?.toLowerCase().trim() || '';
+              let assignedRole: UserRole = 'VISITANTE';
+              let userDisplayName = fbUser.displayName || fbUser.email?.split('@')[0] || 'Membro';
+
+              if (
+                emailLower === 'vitorleonardoc@gmail.com' || 
+                emailLower === 'vitorleonardocl@gmail.com' || 
+                emailLower === 'vitorleonardocl@gmail.com.br'
+              ) {
+                assignedRole = 'MASTER';
+                userDisplayName = 'Vitor Leonardo';
+              } else {
+                const registeredUser = updatedState.users.find(u => u.username.toLowerCase().trim() === emailLower);
+                if (registeredUser) {
+                  assignedRole = registeredUser.role;
+                  userDisplayName = registeredUser.name;
+                }
+              }
+
+              // Update context user session to align with the database
+              updatedState.currentUser = {
+                id: `fb-${fbUser.uid}`,
+                name: userDisplayName,
+                username: fbUser.email || '',
+                role: assignedRole,
+                avatarColor: assignedRole === 'MASTER' ? 'bg-indigo-900' : assignedRole === 'TESOUREIRO' ? 'bg-blue-600' : assignedRole === 'SECRETARIA' ? 'bg-indigo-600' : assignedRole === 'DIRIGENTE' ? 'bg-emerald-600' : 'bg-slate-500'
+              };
+
+              return updatedState;
+            });
+          }
+        } catch (err) {
+          console.error("Erro ao sincronizar login ativo com Firestore:", err);
+        }
+      }
+    });
+
+    return () => unsubscribe();
+  }, []);
 
   // Sync state changes durably to Google Firestore if a Firebase User is logged in
   useEffect(() => {
@@ -899,6 +958,14 @@ export default function App() {
               </svg>
               <span>Entrar com o Google</span>
             </button>
+
+            {/* Iframe detection / browser cookie notice helper */}
+            <div className="p-3 bg-amber-50 rounded-2xl border border-amber-200 text-[10px] text-amber-850 font-semibold space-y-1">
+              <span className="block font-bold text-amber-900 border-b border-amber-150 pb-1">💡 Dica de Acesso Google Sign-In:</span>
+              <p className="leading-normal font-medium">
+                Se você tentar entrar com Google e nada acontecer (ou a janela fechar sem logar), é porque o <strong>Iframe do AI Studio</strong> ou cookies externos estão restringindo o popup. Clique no botão de <strong>Nova Aba ↗</strong> no canto superior do painel para abrir o sistema diretamente!
+              </p>
+            </div>
 
             {/* Google Config Guide / Help */}
             <div className="mt-3 text-center">
