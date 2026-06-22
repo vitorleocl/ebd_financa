@@ -156,86 +156,84 @@ export default function App() {
       const fbUser = result.user;
       
       if (fbUser) {
-        setGoogleProfileData({
+        const rawUid = fbUser.uid;
+        const emailLower = fbUser.email?.toLowerCase().trim() || '';
+        const name = fbUser.displayName || fbUser.email?.split('@')[0] || 'Membro Google';
+
+        const updatedState = { ...state };
+
+        // Load the shared state from firestore so we have the latest registered users list!
+        try {
+          const savedState = await loadStateFromFirestore(rawUid);
+          if (savedState) {
+            updatedState.boxes = savedState.boxes || updatedState.boxes;
+            updatedState.categories = savedState.categories || updatedState.categories;
+            updatedState.transactions = savedState.transactions || updatedState.transactions;
+            updatedState.people = savedState.people || updatedState.people;
+            updatedState.closings = savedState.closings || updatedState.closings;
+            updatedState.auditLogs = savedState.auditLogs || updatedState.auditLogs;
+            updatedState.users = savedState.users || updatedState.users;
+          }
+        } catch (err) {
+          console.error("Erro ao sincronizar dados do Google Firestore:", err);
+        }
+
+        // Decide the role: default is VISITANTE unless Master email or pre-configured
+        let assignedRole: UserRole = 'VISITANTE';
+        if (
+          emailLower === 'vitorleonardoc@gmail.com' || 
+          emailLower === 'vitorleonardocl@gmail.com' || 
+          emailLower === 'vitorleonardocl@gmail.com.br'
+        ) {
+          assignedRole = 'MASTER';
+        } else {
+          // If the user has already been registered in the users array (e.g. pre-configured or updated by MASTER)
+          const existingUser = updatedState.users.find(u => u.username.toLowerCase().trim() === emailLower);
+          if (existingUser) {
+            assignedRole = existingUser.role;
+          }
+        }
+
+        updatedState.currentUser = {
           id: `fb-${fbUser.uid}`,
-          name: fbUser.displayName || fbUser.email?.split('@')[0] || 'Membro Google',
-          email: fbUser.email || '',
-          picture: fbUser.photoURL || ''
+          name: name,
+          username: fbUser.email || '',
+          role: assignedRole,
+          avatarColor: assignedRole === 'MASTER' ? 'bg-indigo-900' : assignedRole === 'TESOUREIRO' ? 'bg-blue-600' : assignedRole === 'SECRETARIA' ? 'bg-indigo-600' : assignedRole === 'DIRIGENTE' ? 'bg-emerald-600' : 'bg-slate-500'
+        };
+
+        const existingInListIndex = updatedState.users.findIndex(u => u.username.toLowerCase().trim() === emailLower);
+        if (existingInListIndex >= 0) {
+          updatedState.users[existingInListIndex].id = `fb-${fbUser.uid}`;
+          updatedState.users[existingInListIndex].name = name;
+        } else {
+          updatedState.users.push({
+            id: `fb-${fbUser.uid}`,
+            name: name,
+            username: fbUser.email || '',
+            role: assignedRole,
+            avatarColor: assignedRole === 'MASTER' ? 'bg-indigo-900' : assignedRole === 'TESOUREIRO' ? 'bg-blue-600' : assignedRole === 'SECRETARIA' ? 'bg-indigo-600' : assignedRole === 'DIRIGENTE' ? 'bg-emerald-600' : 'bg-slate-500'
+          });
+        }
+
+        addAuditLog(updatedState, 'Login Google Concluido', `Acesso autenticado via Google Sign-In (${fbUser.email}) associado ao perfil ${assignedRole}.`, updatedState.currentUser);
+        
+        // Save to Firestore in a background promise so the UI transitions instantly and login never hangs
+        saveStateToFirestore(rawUid, updatedState).catch(err => {
+          console.error("Erro ao salvar dados novos do Google no Firestore:", err);
         });
-        setShowGoogleRoleModal(true);
+
+        setState(updatedState);
+        
+        if (assignedRole === 'SECRETARIA') {
+          setActiveTab('caixas');
+        } else {
+          setActiveTab('dashboard');
+        }
       }
     } catch (error: any) {
       console.error("Erro Google Sign-In via Firebase:", error);
       setLoginError(`Erro de Login Google: ${getFriendlyFirebaseError(error.code || error.message)}`);
-    }
-  };
-
-  const handleConfirmGoogleRole = async (role: UserRole) => {
-    if (!googleProfileData) return;
-    
-    setShowGoogleRoleModal(false);
-    
-    const updatedState = { ...state };
-    const rawUid = googleProfileData.id.replace('fb-', '');
-    
-    try {
-      const savedState = await loadStateFromFirestore(rawUid);
-      if (savedState) {
-        updatedState.boxes = savedState.boxes || updatedState.boxes;
-        updatedState.categories = savedState.categories || updatedState.categories;
-        updatedState.transactions = savedState.transactions || updatedState.transactions;
-        updatedState.people = savedState.people || updatedState.people;
-        updatedState.closings = savedState.closings || updatedState.closings;
-        updatedState.auditLogs = savedState.auditLogs || updatedState.auditLogs;
-        updatedState.users = savedState.users || updatedState.users;
-      }
-    } catch (err) {
-      console.error("Erro ao sincronizar dados do Google Firestore:", err);
-    }
-
-    const emailLower = googleProfileData.email.toLowerCase().trim();
-    let assignedRole = role;
-    if (
-      emailLower === 'vitorleonardoc@gmail.com' || 
-      emailLower === 'vitorleonardocl@gmail.com' || 
-      emailLower === 'vitorleonardocl@gmail.com.br'
-    ) {
-      assignedRole = 'MASTER';
-    }
-
-    updatedState.currentUser = {
-      id: googleProfileData.id,
-      name: googleProfileData.name,
-      username: googleProfileData.email,
-      role: assignedRole,
-      avatarColor: assignedRole === 'MASTER' ? 'bg-indigo-900' : assignedRole === 'TESOUREIRO' ? 'bg-blue-600' : assignedRole === 'SECRETARIA' ? 'bg-indigo-600' : 'bg-emerald-600'
-    };
-
-    const isAlreadyInList = updatedState.users.some(u => u.username.toLowerCase().trim() === emailLower);
-    if (!isAlreadyInList) {
-      updatedState.users.push({
-        id: googleProfileData.id,
-        name: googleProfileData.name,
-        username: googleProfileData.email,
-        role: assignedRole,
-        avatarColor: assignedRole === 'MASTER' ? 'bg-indigo-900' : assignedRole === 'TESOUREIRO' ? 'bg-blue-600' : assignedRole === 'SECRETARIA' ? 'bg-indigo-600' : 'bg-emerald-600'
-      });
-    }
-
-    addAuditLog(updatedState, 'Login Google Concluido', `Acesso autenticado via Google Sign-In (${googleProfileData.email}) associado ao perfil ${assignedRole}.`, updatedState.currentUser);
-    
-    // Save to Firestore in a background promise so the UI transitions instantly and login never hangs
-    saveStateToFirestore(rawUid, updatedState).catch(err => {
-      console.error("Erro ao salvar dados novos do Google no Firestore:", err);
-    });
-
-    setState(updatedState);
-    setGoogleProfileData(null);
-    
-    if (assignedRole === 'SECRETARIA') {
-      setActiveTab('cadastro');
-    } else {
-      setActiveTab('dashboard');
     }
   };
 
@@ -301,7 +299,7 @@ export default function App() {
       }
 
       // Look for custom user metadata stored in state, or default role based on email/auth.
-      let assignedRole: UserRole = 'DIRIGENTE'; // fallback
+      let assignedRole: UserRole = 'VISITANTE'; // fallback is now VISITANTE!
       let userDisplayName = fbUser.displayName || fbUser.email?.split('@')[0] || 'Membro';
       const emailLower = fbUser.email?.toLowerCase().trim() || '';
 
@@ -321,7 +319,7 @@ export default function App() {
           assignedRole = savedState.currentUser.role;
           userDisplayName = savedState.currentUser.name;
         } else {
-          // Look up by email conventions or use DIRIGENTE as standard role
+          // Look up by email conventions, or default to VISITANTE
           if (fbUser.email?.includes('secretaria')) assignedRole = 'SECRETARIA';
           else if (fbUser.email?.includes('tesouraria') || fbUser.email?.includes('tesoureiro')) assignedRole = 'TESOUREIRO';
         }
@@ -332,7 +330,7 @@ export default function App() {
         name: userDisplayName,
         username: fbUser.email || '',
         role: assignedRole,
-        avatarColor: assignedRole === 'MASTER' ? 'bg-indigo-900' : assignedRole === 'TESOUREIRO' ? 'bg-blue-600' : assignedRole === 'SECRETARIA' ? 'bg-indigo-600' : 'bg-emerald-600'
+        avatarColor: assignedRole === 'MASTER' ? 'bg-indigo-900' : assignedRole === 'TESOUREIRO' ? 'bg-blue-600' : assignedRole === 'SECRETARIA' ? 'bg-indigo-600' : assignedRole === 'DIRIGENTE' ? 'bg-emerald-600' : 'bg-slate-500'
       };
 
       // Safeguard email is present in users array
@@ -343,7 +341,7 @@ export default function App() {
           name: userDisplayName,
           username: fbUser.email || '',
           role: assignedRole,
-          avatarColor: assignedRole === 'MASTER' ? 'bg-indigo-900' : assignedRole === 'TESOUREIRO' ? 'bg-blue-600' : assignedRole === 'SECRETARIA' ? 'bg-indigo-600' : 'bg-emerald-600'
+          avatarColor: assignedRole === 'MASTER' ? 'bg-indigo-900' : assignedRole === 'TESOUREIRO' ? 'bg-blue-600' : assignedRole === 'SECRETARIA' ? 'bg-indigo-600' : assignedRole === 'DIRIGENTE' ? 'bg-emerald-600' : 'bg-slate-500'
         });
       }
 
@@ -351,7 +349,7 @@ export default function App() {
       setState(updatedState);
       
       if (assignedRole === 'SECRETARIA') {
-        setActiveTab('cadastro');
+        setActiveTab('caixas');
       } else {
         setActiveTab('dashboard');
       }
@@ -380,7 +378,7 @@ export default function App() {
       const updatedState = { ...state };
       
       const emailLower = firebaseEmail.toLowerCase().trim();
-      let assignedRole = firebaseRole;
+      let assignedRole: UserRole = 'VISITANTE'; // All register users default to VISITANTE
       if (
         emailLower === 'vitorleonardoc@gmail.com' || 
         emailLower === 'vitorleonardocl@gmail.com' || 
@@ -395,7 +393,7 @@ export default function App() {
         name: firebaseName,
         username: firebaseEmail,
         role: assignedRole,
-        avatarColor: assignedRole === 'MASTER' ? 'bg-indigo-900' : assignedRole === 'TESOUREIRO' ? 'bg-blue-600' : assignedRole === 'SECRETARIA' ? 'bg-indigo-600' : 'bg-emerald-600'
+        avatarColor: assignedRole === 'MASTER' ? 'bg-indigo-900' : 'bg-slate-500'
       };
 
       // Also register this user into our local system user directory
@@ -406,7 +404,7 @@ export default function App() {
           name: firebaseName,
           username: firebaseEmail,
           role: assignedRole,
-          avatarColor: assignedRole === 'MASTER' ? 'bg-indigo-900' : assignedRole === 'TESOUREIRO' ? 'bg-blue-600' : assignedRole === 'SECRETARIA' ? 'bg-indigo-600' : 'bg-emerald-600'
+          avatarColor: assignedRole === 'MASTER' ? 'bg-indigo-900' : 'bg-slate-500'
         });
       }
 
@@ -417,11 +415,7 @@ export default function App() {
       
       setState(updatedState);
       
-      if (assignedRole === 'SECRETARIA') {
-        setActiveTab('cadastro');
-      } else {
-        setActiveTab('dashboard');
-      }
+      setActiveTab('dashboard');
 
       // Reset fields
       setFirebaseEmail('');
@@ -870,19 +864,6 @@ export default function App() {
                       />
                     </div>
 
-                    <div className="space-y-1.5">
-                      <label className="text-slate-600 uppercase tracking-widest block text-[10px]">Cargo Executivo EBD</label>
-                      <select
-                        value={firebaseRole}
-                        onChange={(e) => setFirebaseRole(e.target.value as UserRole)}
-                        className="block w-full border border-slate-200 rounded-xl p-3 sm:text-xs text-slate-800 outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 font-bold"
-                      >
-                        <option value="SECRETARIA">Secretária (Cadastros & Fluxos)</option>
-                        <option value="TESOUREIRO">Tesoureiro (Saldos & Fechamento)</option>
-                        <option value="DIRIGENTE">Dirigente (Auditoria Geral)</option>
-                      </select>
-                    </div>
-
                     <button
                       type="submit"
                       className="w-full bg-indigo-600 hover:bg-indigo-700 border border-indigo-600 text-white rounded-xl py-3 text-center font-bold text-xs shadow-md transition-all cursor-pointer active:scale-[0.98] mt-2 flex items-center justify-center gap-1.5"
@@ -980,75 +961,6 @@ export default function App() {
           </div>
         </div>
 
-        {/* Visual Component: Real Google Sign-in Role Selection Modal */}
-        {showGoogleRoleModal && googleProfileData && (
-          <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-            <div className="bg-white rounded-3xl border border-slate-100 shadow-2xl p-6 max-w-sm w-full space-y-4 animate-slide-in">
-              <div className="text-center space-y-2">
-                {googleProfileData.picture ? (
-                  <img src={googleProfileData.picture} alt="Avatar" className="w-12 h-12 rounded-full mx-auto border border-indigo-200 shadow-sm" referrerPolicy="no-referrer" />
-                ) : (
-                  <div className="w-12 h-12 bg-indigo-50 border border-indigo-100 text-indigo-600 rounded-full flex items-center justify-center mx-auto text-sm font-bold">
-                    {googleProfileData.name.substring(0, 2).toUpperCase()}
-                  </div>
-                )}
-                <h4 className="font-extrabold text-sm text-slate-800 tracking-tight">Atribuir Cargo de Acesso</h4>
-                <p className="text-[11px] text-slate-400 leading-normal col-span-2">
-                  Olá, <strong className="text-slate-700">{googleProfileData.name}</strong>! Escolha qual cargo da diretoria da EBD você deseja assumir nesta sessão usando seu login Google.
-                </p>
-              </div>
-
-              <div className="space-y-2 text-xs">
-                <button
-                  type="button"
-                  onClick={() => handleConfirmGoogleRole('TESOUREIRO')}
-                  className="w-full text-left p-3 border border-slate-150 hover:border-indigo-200 bg-slate-50 hover:bg-indigo-50/10 rounded-2xl flex items-center justify-between gap-3 transition-all cursor-pointer font-bold text-slate-800"
-                >
-                  <div>
-                    <span className="block font-bold text-slate-800 text-[11px]">Tesoureiro</span>
-                    <span className="text-[10px] text-slate-400 block font-normal">Saldos, estornos e fechamento semanal</span>
-                  </div>
-                  <span className="w-2.5 h-2.5 rounded-full bg-blue-500 shrink-0" />
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => handleConfirmGoogleRole('SECRETARIA')}
-                  className="w-full text-left p-3 border border-slate-150 hover:border-indigo-200 bg-slate-50 hover:bg-indigo-50/10 rounded-2xl flex items-center justify-between gap-3 transition-all cursor-pointer font-bold text-slate-800"
-                >
-                  <div>
-                    <span className="block font-bold text-slate-800 text-[11px]">Secretária</span>
-                    <span className="text-[10px] text-slate-400 block font-normal">Cadastros e preenchimento de lançamentos</span>
-                  </div>
-                  <span className="w-2.5 h-2.5 rounded-full bg-indigo-500 shrink-0" />
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => handleConfirmGoogleRole('DIRIGENTE')}
-                  className="w-full text-left p-3 border border-slate-150 hover:border-indigo-200 bg-slate-50 hover:bg-indigo-50/10 rounded-2xl flex items-center justify-between gap-3 transition-all cursor-pointer font-bold text-slate-800"
-                >
-                  <div>
-                    <span className="block font-bold text-slate-800 text-[11px]">Dirigente Pastoral</span>
-                    <span className="text-[10px] text-slate-400 block font-normal">Auditar relatórios e visar financeiro</span>
-                  </div>
-                  <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 shrink-0" />
-                </button>
-              </div>
-
-              <div className="pt-2">
-                <button
-                  type="button"
-                  onClick={() => { setShowGoogleRoleModal(false); setGoogleProfileData(null); }}
-                  className="w-full py-2 border border-slate-200 hover:bg-slate-50 text-slate-500 rounded-xl font-bold text-xs cursor-pointer text-center"
-                >
-                  Cancelar
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
-
       </div>
     );
   }
@@ -1096,82 +1008,84 @@ export default function App() {
             </div>
 
             {/* Desktop Navigation Links */}
-            <div className="hidden lg:flex items-center gap-1.5 text-xs font-bold">
-              <button
-                onClick={() => setActiveTab('dashboard')}
-                className={`px-3 py-2 rounded-xl transition-all ${
-                  activeTab === 'dashboard' ? 'bg-slate-800 text-indigo-300' : 'text-slate-350 hover:bg-slate-800 hover:text-white'
-                }`}
-              >
-                Dashboard
-              </button>
-
-              <button
-                onClick={() => setActiveTab('caixas')}
-                className={`px-3 py-2 rounded-xl transition-all ${
-                  activeTab === 'caixas' ? 'bg-slate-800 text-indigo-300' : 'text-slate-350 hover:bg-slate-800 hover:text-white'
-                }`}
-              >
-                Caixas
-              </button>
-
-              {user.role !== 'VISITANTE' && user.role !== 'DIRIGENTE' && (
+            {user.role !== 'VISITANTE' && (
+              <div className="hidden lg:flex items-center gap-1.5 text-xs font-bold">
                 <button
-                  onClick={() => setActiveTab('nova_movimentacao')}
-                  className={`px-3 py-2 rounded-xl transition-all flex items-center gap-1 ${
-                    activeTab === 'nova_movimentacao' ? 'bg-slate-800 text-indigo-300' : 'text-slate-350 hover:bg-slate-800 hover:text-white'
+                  onClick={() => setActiveTab('dashboard')}
+                  className={`px-3 py-2 rounded-xl transition-all ${
+                    activeTab === 'dashboard' ? 'bg-slate-800 text-indigo-300' : 'text-slate-350 hover:bg-slate-800 hover:text-white'
                   }`}
-                  id="tab-new-tx"
                 >
-                  <PlusCircle className="w-3.5 h-3.5" />
-                  Nova Movimentação
+                  Dashboard
                 </button>
-              )}
 
-              <button
-                onClick={() => setActiveTab('fechamento')}
-                className={`px-3 py-2 rounded-xl transition-all ${
-                  activeTab === 'fechamento' ? 'bg-slate-800 text-indigo-300' : 'text-slate-350 hover:bg-slate-800 hover:text-white'
-                }`}
-                id="tab-closing"
-              >
-                Fechamento Semanal
-              </button>
-
-              <button
-                onClick={() => setActiveTab('relatorios')}
-                className={`px-3 py-2 rounded-xl transition-all ${
-                  activeTab === 'relatorios' ? 'bg-slate-800 text-indigo-300' : 'text-slate-350 hover:bg-slate-800 hover:text-white'
-                }`}
-                id="tab-reports"
-              >
-                Relatórios
-              </button>
-
-              <button
-                onClick={() => setActiveTab('auditoria')}
-                className={`px-3 py-2 rounded-xl transition-all flex items-center gap-1 ${
-                  activeTab === 'auditoria' ? 'bg-slate-800 text-indigo-300' : 'text-slate-350 hover:bg-slate-800 hover:text-white'
-                }`}
-                id="tab-audits"
-              >
-                <History className="w-3.5 h-3.5" />
-                Auditoria
-              </button>
-
-              {user.role === 'MASTER' && (
                 <button
-                  onClick={() => setActiveTab('usuarios')}
-                  className={`px-3 py-2 rounded-xl transition-all flex items-center gap-1 ${
-                    activeTab === 'usuarios' ? 'bg-slate-800 text-indigo-300' : 'text-slate-350 hover:bg-slate-800 hover:text-white'
+                  onClick={() => setActiveTab('caixas')}
+                  className={`px-3 py-2 rounded-xl transition-all ${
+                    activeTab === 'caixas' ? 'bg-slate-800 text-indigo-300' : 'text-slate-350 hover:bg-slate-800 hover:text-white'
                   }`}
-                  id="tab-users-mgmt"
                 >
-                  <Users className="w-3.5 h-3.5" />
-                  Usuários
+                  Caixas
                 </button>
-              )}
-            </div>
+
+                {user.role !== 'VISITANTE' && user.role !== 'DIRIGENTE' && (
+                  <button
+                    onClick={() => setActiveTab('nova_movimentacao')}
+                    className={`px-3 py-2 rounded-xl transition-all flex items-center gap-1 ${
+                      activeTab === 'nova_movimentacao' ? 'bg-slate-800 text-indigo-300' : 'text-slate-350 hover:bg-slate-800 hover:text-white'
+                    }`}
+                    id="tab-new-tx"
+                  >
+                    <PlusCircle className="w-3.5 h-3.5" />
+                    Nova Movimentação
+                  </button>
+                )}
+
+                <button
+                  onClick={() => setActiveTab('fechamento')}
+                  className={`px-3 py-2 rounded-xl transition-all ${
+                    activeTab === 'fechamento' ? 'bg-slate-800 text-indigo-300' : 'text-slate-350 hover:bg-slate-800 hover:text-white'
+                  }`}
+                  id="tab-closing"
+                >
+                  Fechamento Semanal
+                </button>
+
+                <button
+                  onClick={() => setActiveTab('relatorios')}
+                  className={`px-3 py-2 rounded-xl transition-all ${
+                    activeTab === 'relatorios' ? 'bg-slate-800 text-indigo-300' : 'text-slate-350 hover:bg-slate-800 hover:text-white'
+                  }`}
+                  id="tab-reports"
+                >
+                  Relatórios
+                </button>
+
+                <button
+                  onClick={() => setActiveTab('auditoria')}
+                  className={`px-3 py-2 rounded-xl transition-all flex items-center gap-1 ${
+                    activeTab === 'auditoria' ? 'bg-slate-800 text-indigo-300' : 'text-slate-350 hover:bg-slate-800 hover:text-white'
+                  }`}
+                  id="tab-audits"
+                >
+                  <History className="w-3.5 h-3.5" />
+                  Auditoria
+                </button>
+
+                {user.role === 'MASTER' && (
+                  <button
+                    onClick={() => setActiveTab('usuarios')}
+                    className={`px-3 py-2 rounded-xl transition-all flex items-center gap-1 ${
+                      activeTab === 'usuarios' ? 'bg-slate-800 text-indigo-300' : 'text-slate-350 hover:bg-slate-800 hover:text-white'
+                    }`}
+                    id="tab-users-mgmt"
+                  >
+                    <Users className="w-3.5 h-3.5" />
+                    Usuários
+                  </button>
+                )}
+              </div>
+            )}
 
             {/* Profile details & Backup features */}
             <div className="hidden lg:flex items-center gap-4 text-xs">
@@ -1184,35 +1098,37 @@ export default function App() {
               </div>
               
               {/* Database sync and download backup row */}
-              <div className="flex items-center gap-1.5">
-                {user.id.startsWith('fb-') && (
-                  <div className="flex items-center gap-1.5 text-[9px] font-bold font-mono uppercase px-2.5 py-1 bg-indigo-500/10 text-indigo-300 border border-indigo-500/20 rounded-md">
-                    <Cloud className={`w-3 h-3 ${syncingFirestore ? 'animate-bounce text-indigo-400' : 'text-emerald-400'}`} />
-                    <span>{syncingFirestore ? 'Salvando...' : lastSyncedTime ? `Nuvem Ok (${lastSyncedTime})` : 'Nuvem Ativa'}</span>
-                  </div>
-                )}
+              {user.role !== 'VISITANTE' && (
+                <div className="flex items-center gap-1.5">
+                  {user.id.startsWith('fb-') && (
+                    <div className="flex items-center gap-1.5 text-[9px] font-bold font-mono uppercase px-2.5 py-1 bg-indigo-500/10 text-indigo-300 border border-indigo-500/20 rounded-md">
+                      <Cloud className={`w-3 h-3 ${syncingFirestore ? 'animate-bounce text-indigo-400' : 'text-emerald-400'}`} />
+                      <span>{syncingFirestore ? 'Salvando...' : lastSyncedTime ? `Nuvem Ok (${lastSyncedTime})` : 'Nuvem Ativa'}</span>
+                    </div>
+                  )}
 
-                <button
-                  type="button"
-                  onClick={handleDownloadBackup}
-                  className="p-1 px-2 hover:bg-indigo-600 rounded bg-indigo-500/10 text-indigo-400 hover:text-white border border-indigo-450/15 duration-100 flex items-center gap-1 font-bold font-mono text-[9px] uppercase tracking-wide cursor-pointer"
-                  title="Fazer download de Segurança (Respaldo Completo)"
-                >
-                  <FileDown className="w-3 h-3" />
-                  Backup
-                </button>
+                  <button
+                    type="button"
+                    onClick={handleDownloadBackup}
+                    className="p-1 px-2 hover:bg-indigo-600 rounded bg-indigo-500/10 text-indigo-400 hover:text-white border border-indigo-450/15 duration-100 flex items-center gap-1 font-bold font-mono text-[9px] uppercase tracking-wide cursor-pointer"
+                    title="Fazer download de Segurança (Respaldo Completo)"
+                  >
+                    <FileDown className="w-3 h-3" />
+                    Backup
+                  </button>
 
-                <label className="p-1 px-2 hover:bg-slate-850 rounded bg-slate-800 border border-slate-700 text-slate-300 hover:text-white duration-100 flex items-center gap-1 font-bold font-mono text-[9px] uppercase tracking-wide cursor-pointer">
-                  <FileUp className="w-3 h-3" />
-                  Restaurar
-                  <input
-                    type="file"
-                    accept=".json"
-                    onChange={handleUploadBackup}
-                    className="hidden"
-                  />
-                </label>
-              </div>
+                  <label className="p-1 px-2 hover:bg-slate-850 rounded bg-slate-800 border border-slate-700 text-slate-300 hover:text-white duration-100 flex items-center gap-1 font-bold font-mono text-[9px] uppercase tracking-wide cursor-pointer">
+                    <FileUp className="w-3 h-3" />
+                    Restaurar
+                    <input
+                      type="file"
+                      accept=".json"
+                      onChange={handleUploadBackup}
+                      className="hidden"
+                    />
+                  </label>
+                </div>
+              )}
 
               <button
                 onClick={handleLogout}
@@ -1241,78 +1157,91 @@ export default function App() {
         {/* Mobile menu panel dropdown */}
         {mobileMenuOpen && (
           <div className="lg:hidden bg-slate-850 border-t border-slate-800 px-4 pt-2 pb-4 space-y-2 text-xs font-bold font-sans">
-            <button
-              onClick={() => { setActiveTab('dashboard'); setMobileMenuOpen(false); }}
-              className={`block w-full text-left py-2 px-3 rounded-lg ${activeTab === 'dashboard' ? 'bg-slate-800 text-indigo-300' : 'text-slate-300'}`}
-            >
-              Dashboard
-            </button>
-            
-            <button
-              onClick={() => { setActiveTab('caixas'); setMobileMenuOpen(false); }}
-              className={`block w-full text-left py-2 px-3 rounded-lg ${activeTab === 'caixas' ? 'bg-slate-800 text-indigo-300' : 'text-slate-300'}`}
-            >
-              Caixas
-            </button>
-
-            {user.role !== 'VISITANTE' && user.role !== 'DIRIGENTE' && (
-              <button
-                onClick={() => { setActiveTab('nova_movimentacao'); setMobileMenuOpen(false); }}
-                className={`block w-full text-left py-2 px-3 rounded-lg ${activeTab === 'nova_movimentacao' ? 'bg-slate-800 text-indigo-300' : 'text-slate-300'}`}
-              >
-                Nova Movimentação
-              </button>
-            )}
-
-            <button
-              onClick={() => { setActiveTab('fechamento'); setMobileMenuOpen(false); }}
-              className={`block w-full text-left py-2 px-3 rounded-lg ${activeTab === 'fechamento' ? 'bg-slate-800 text-indigo-300' : 'text-slate-300'}`}
-            >
-              Fechamento Semanal
-            </button>
-
-            <button
-              onClick={() => { setActiveTab('relatorios'); setMobileMenuOpen(false); }}
-              className={`block w-full text-left py-2 px-3 rounded-lg ${activeTab === 'relatorios' ? 'bg-slate-800 text-indigo-300' : 'text-slate-300'}`}
-            >
-              Relatórios
-            </button>
-
-            <button
-              onClick={() => { setActiveTab('auditoria'); setMobileMenuOpen(false); }}
-              className={`block w-full text-left py-2 px-3 rounded-lg ${activeTab === 'auditoria' ? 'bg-slate-800 text-indigo-300' : 'text-slate-300'}`}
-            >
-              Auditoria
-            </button>
-
-            {user.role === 'MASTER' && (
-              <button
-                onClick={() => { setActiveTab('usuarios'); setMobileMenuOpen(false); }}
-                className={`block w-full text-left py-2 px-3 rounded-lg ${activeTab === 'usuarios' ? 'bg-slate-800 text-indigo-300' : 'text-slate-300'}`}
-              >
-                Gerenciar Usuários
-              </button>
-            )}
-
-            <div className="border-t border-slate-700 pt-3 flex flex-col gap-2">
-              <div className="text-[10px] text-slate-400">Usuário: {user.name} ({user.role})</div>
-              
-              <div className="flex gap-2">
+            {user.role !== 'VISITANTE' ? (
+              <>
                 <button
-                  onClick={() => { handleDownloadBackup(); setMobileMenuOpen(false); }}
-                  className="flex-1 py-1 px-3 bg-indigo-500/15 border border-indigo-500/25 text-indigo-300 rounded text-center text-[10px]"
+                  onClick={() => { setActiveTab('dashboard'); setMobileMenuOpen(false); }}
+                  className={`block w-full text-left py-2 px-3 rounded-lg ${activeTab === 'dashboard' ? 'bg-slate-800 text-indigo-300' : 'text-slate-300'}`}
                 >
-                  Download Backup
+                  Dashboard
                 </button>
+                
+                <button
+                  onClick={() => { setActiveTab('caixas'); setMobileMenuOpen(false); }}
+                  className={`block w-full text-left py-2 px-3 rounded-lg ${activeTab === 'caixas' ? 'bg-slate-800 text-indigo-300' : 'text-slate-300'}`}
+                >
+                  Caixas
+                </button>
+
+                {user.role !== 'VISITANTE' && user.role !== 'DIRIGENTE' && (
+                  <button
+                    onClick={() => { setActiveTab('nova_movimentacao'); setMobileMenuOpen(false); }}
+                    className={`block w-full text-left py-2 px-3 rounded-lg ${activeTab === 'nova_movimentacao' ? 'bg-slate-800 text-indigo-300' : 'text-slate-300'}`}
+                  >
+                    Nova Movimentação
+                  </button>
+                )}
+
+                <button
+                  onClick={() => { setActiveTab('fechamento'); setMobileMenuOpen(false); }}
+                  className={`block w-full text-left py-2 px-3 rounded-lg ${activeTab === 'fechamento' ? 'bg-slate-800 text-indigo-300' : 'text-slate-300'}`}
+                >
+                  Fechamento Semanal
+                </button>
+
+                <button
+                  onClick={() => { setActiveTab('relatorios'); setMobileMenuOpen(false); }}
+                  className={`block w-full text-left py-2 px-3 rounded-lg ${activeTab === 'relatorios' ? 'bg-slate-800 text-indigo-300' : 'text-slate-300'}`}
+                >
+                  Relatórios
+                </button>
+
+                <button
+                  onClick={() => { setActiveTab('auditoria'); setMobileMenuOpen(false); }}
+                  className={`block w-full text-left py-2 px-3 rounded-lg ${activeTab === 'auditoria' ? 'bg-slate-800 text-indigo-300' : 'text-slate-300'}`}
+                >
+                  Auditoria
+                </button>
+
+                {user.role === 'MASTER' && (
+                  <button
+                    onClick={() => { setActiveTab('usuarios'); setMobileMenuOpen(false); }}
+                    className={`block w-full text-left py-2 px-3 rounded-lg ${activeTab === 'usuarios' ? 'bg-slate-800 text-indigo-300' : 'text-slate-300'}`}
+                  >
+                    Gerenciar Usuários
+                  </button>
+                )}
+
+                <div className="border-t border-slate-700 pt-3 flex flex-col gap-2">
+                  <div className="text-[10px] text-slate-400">Usuário: {user.name} ({user.role})</div>
+                  
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => { handleDownloadBackup(); setMobileMenuOpen(false); }}
+                      className="flex-1 py-1 px-3 bg-indigo-500/15 border border-indigo-500/25 text-indigo-300 rounded text-center text-[10px]"
+                    >
+                      Download Backup
+                    </button>
+                    <button
+                      onClick={handleLogout}
+                      className="flex-1 py-1 px-3 bg-red-500/10 border border-red-500/20 text-red-400 rounded text-center text-[10px]"
+                    >
+                      Sair do Sistema
+                    </button>
+                  </div>
+                </div>
+              </>
+            ) : (
+              <div className="pt-2 flex flex-col gap-2">
+                <div className="text-[10px] text-slate-400">Acesso Restrito: {user.name} ({user.role})</div>
                 <button
                   onClick={handleLogout}
-                  className="flex-1 py-1 px-3 bg-red-500/10 border border-red-500/20 text-red-400 rounded text-center text-[10px]"
+                  className="w-full py-2 bg-red-500/10 border border-red-500/20 text-red-400 rounded text-center text-[11px]"
                 >
                   Sair do Sistema
                 </button>
               </div>
-            </div>
-
+            )}
           </div>
         )}
       </nav>
@@ -1320,90 +1249,128 @@ export default function App() {
       {/* Main Content Area */}
       <main className="flex-1 max-w-7xl w-full mx-auto p-4 sm:p-6 lg:p-8">
         
-        {/* Render appropriate segment based on activeTab */}
-        <div className="transition-all duration-300">
-          
-          {activeTab === 'dashboard' && (
-            <Dashboard
-              boxes={state.boxes}
-              transactions={state.transactions}
-              onApproveTransaction={handleApproveTransaction}
-              onViewTransaction={(tx) => setActiveReceipt(tx)}
-              currentUser={user}
-              onNavigateToTab={(tabName) => setActiveTab(tabName)}
-            />
-          )}
-
-          {activeTab === 'caixas' && (
-            <BoxesManagement
-              boxes={state.boxes}
-              transactions={state.transactions}
-              categories={state.categories}
-              currentUser={user}
-              onViewTransaction={(tx) => setActiveReceipt(tx)}
-              onTransfer={handleTransferFunds}
-            />
-          )}
-
-          {activeTab === 'nova_movimentacao' && (
-            user.role !== 'VISITANTE' && user.role !== 'DIRIGENTE' ? (
-              <TransactionForm
-                categories={state.categories}
-                onSubmit={handleAddTransaction}
-                currentUser={user}
-              />
-            ) : (
-              <div className="bg-white rounded-2xl p-8 text-center max-w-md mx-auto border border-slate-100">
-                <ShieldAlert className="w-12 h-12 text-amber-500 mx-auto mb-3" />
-                <h4 className="font-bold text-sm text-slate-800">Acesso Restrito</h4>
-                <p className="text-xs text-slate-500 mt-2 leading-relaxed">
-                  Desculpe. O preenchimento e lançamento de lançamentos financeiros só é assegurado aos cargos de <strong>Secretária</strong> ou <strong>Tesoureiro</strong>.
-                </p>
+        {user.role === 'VISITANTE' ? (
+          <div className="max-w-md mx-auto mt-12 text-center space-y-6">
+            <div className="inline-flex p-4 rounded-full bg-slate-100 text-slate-500 border border-slate-200">
+              <ShieldCheck className="w-12 h-12 text-indigo-600 animate-pulse" />
+            </div>
+            <div className="space-y-2">
+              <h3 className="font-extrabold text-xl text-slate-800 tracking-tight">Sessão Visitante Ativa</h3>
+              <p className="text-xs text-slate-500 leading-relaxed max-w-sm mx-auto">
+                Seu acesso foi registrado no sistema com sucesso como <strong>VISITANTE</strong>. Nenhuma informação financeira ou dado sensível está disponível para visualização no momento.
+              </p>
+            </div>
+            <div className="bg-white rounded-2xl p-5 border border-slate-200 text-left space-y-3 shadow-sm">
+              <div className="flex items-center gap-3">
+                <div className="w-8 h-8 rounded-full bg-indigo-50 text-indigo-700 flex items-center justify-center font-bold text-xs uppercase shrink-0">
+                  VL
+                </div>
+                <div>
+                  <h4 className="font-bold text-xs text-slate-800">Vitor Leonardo</h4>
+                  <p className="text-[10px] text-slate-400">Administrador Master</p>
+                </div>
               </div>
-            )
-          )}
+              <p className="text-[11px] text-slate-500 leading-normal border-t border-slate-150 pt-2.5">
+                Para fins de segurança e integridade das finanças, os privilégios de Secretária, Tesoureiro ou Dirigente devem ser atribuídos manualmente pelo Administrador Master. Por favor, solicite a liberação do seu perfil.
+              </p>
+            </div>
+            <div className="pt-2">
+              <button
+                onClick={handleLogout}
+                className="px-6 py-2.5 bg-red-600 hover:bg-red-700 border border-red-650 text-white rounded-xl font-bold text-xs shadow-sm transition-all cursor-pointer inline-flex items-center gap-2"
+                id="visitor-logout"
+              >
+                <LogOut className="w-3.5 h-3.5" />
+                Sair do Sistema
+              </button>
+            </div>
+          </div>
+        ) : (
+          /* Render appropriate segment based on activeTab */
+          <div className="transition-all duration-300">
+            
+            {activeTab === 'dashboard' && (
+              <Dashboard
+                boxes={state.boxes}
+                transactions={state.transactions}
+                onApproveTransaction={handleApproveTransaction}
+                onViewTransaction={(tx) => setActiveReceipt(tx)}
+                currentUser={user}
+                onNavigateToTab={(tabName) => setActiveTab(tabName)}
+              />
+            )}
 
-          {activeTab === 'fechamento' && (
-            <WeeklyClosing
-              closings={state.closings}
-              transactions={state.transactions}
-              currentUser={user}
-              onViewAta={(closing) => setActiveAta(closing)}
-              onAddClosing={handleAddClosing}
-              onApproveClosing={handleApproveClosing}
-            />
-          )}
+            {activeTab === 'caixas' && (
+              <BoxesManagement
+                boxes={state.boxes}
+                transactions={state.transactions}
+                categories={state.categories}
+                currentUser={user}
+                onViewTransaction={(tx) => setActiveReceipt(tx)}
+                onTransfer={handleTransferFunds}
+              />
+            )}
 
-          {activeTab === 'relatorios' && (
-            <ReportsView
-              transactions={state.transactions}
-              categories={state.categories}
-              boxes={state.boxes}
-              onViewTransaction={(tx) => setActiveReceipt(tx)}
-            />
-          )}
+            {activeTab === 'nova_movimentacao' && (
+              user.role !== 'VISITANTE' && user.role !== 'DIRIGENTE' ? (
+                <TransactionForm
+                  categories={state.categories}
+                  onSubmit={handleAddTransaction}
+                  currentUser={user}
+                />
+              ) : (
+                <div className="bg-white rounded-2xl p-8 text-center max-w-md mx-auto border border-slate-100">
+                  <ShieldAlert className="w-12 h-12 text-amber-500 mx-auto mb-3" />
+                  <h4 className="font-bold text-sm text-slate-800">Acesso Restrito</h4>
+                  <p className="text-xs text-slate-500 mt-2 leading-relaxed">
+                    Desculpe. O preenchimento e lançamento de lançamentos financeiros só é assegurado aos cargos de <strong>Secretária</strong> ou <strong>Tesoureiro</strong>.
+                  </p>
+                </div>
+              )
+            )}
 
-          {activeTab === 'auditoria' && (
-            <AuditoryView logs={state.auditLogs} />
-          )}
+            {activeTab === 'fechamento' && (
+              <WeeklyClosing
+                closings={state.closings}
+                transactions={state.transactions}
+                currentUser={user}
+                onViewAta={(closing) => setActiveAta(closing)}
+                onAddClosing={handleAddClosing}
+                onApproveClosing={handleApproveClosing}
+              />
+            )}
 
-          {activeTab === 'usuarios' && user.role === 'MASTER' && (
-            <UsersManagement
-              users={state.users}
-              currentUser={user}
-              onUpdateUsersList={(updatedUsers) => {
-                const updatedState = { ...state, users: updatedUsers };
-                setState(updatedState);
-              }}
-              onLogAudit={(action, details) => {
-                const updatedState = { ...state };
-                addAuditLog(updatedState, action, details, user);
-                setState(updatedState);
-              }}
-            />
-          )}
+            {activeTab === 'relatorios' && (
+              <ReportsView
+                transactions={state.transactions}
+                categories={state.categories}
+                boxes={state.boxes}
+                onViewTransaction={(tx) => setActiveReceipt(tx)}
+              />
+            )}
 
-        </div>
+            {activeTab === 'auditoria' && (
+              <AuditoryView logs={state.auditLogs} />
+            )}
+
+            {activeTab === 'usuarios' && user.role === 'MASTER' && (
+              <UsersManagement
+                users={state.users}
+                currentUser={user}
+                onUpdateUsersList={(updatedUsers) => {
+                  const updatedState = { ...state, users: updatedUsers };
+                  setState(updatedState);
+                }}
+                onLogAudit={(action, details) => {
+                  const updatedState = { ...state };
+                  addAuditLog(updatedState, action, details, user);
+                  setState(updatedState);
+                }}
+              />
+            )}
+
+          </div>
+        )}
 
       </main>
 
