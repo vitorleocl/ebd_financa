@@ -9,7 +9,7 @@ import { User, BoxId, Transaction, WeeklyClosing as ClosingType, Person, UserRol
 import { 
   Lock, Landmark, ArrowLeftRight, PlusCircle, CalendarRange, 
   Users, BarChart3, History, LogOut, ShieldAlert, FileDown, FileUp, 
-  Menu, X, BookOpen, AlertCircle, ShieldCheck, Cloud, HelpCircle
+  Menu, X, BookOpen, AlertCircle, ShieldCheck, Cloud
 } from 'lucide-react';
 import { 
   auth, 
@@ -61,7 +61,6 @@ export default function App() {
   // Google Authentication states
   const [showSimulationModal, setShowSimulationModal] = useState(false);
   const [showGoogleRoleModal, setShowGoogleRoleModal] = useState(false);
-  const [showGoogleConfigGuide, setShowGoogleConfigGuide] = useState(false);
   const [googleProfileData, setGoogleProfileData] = useState<{
     id: string;
     name: string;
@@ -83,6 +82,7 @@ export default function App() {
   }, [state]);
 
   // Synchronize active authentication state changes and roles
+
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (fbUser) => {
       if (fbUser) {
@@ -958,65 +958,6 @@ export default function App() {
               </svg>
               <span>Entrar com o Google</span>
             </button>
-
-            {/* Iframe detection / browser cookie notice helper */}
-            <div className="p-3 bg-amber-50 rounded-2xl border border-amber-200 text-[10px] text-amber-850 font-semibold space-y-1">
-              <span className="block font-bold text-amber-900 border-b border-amber-150 pb-1">💡 Dica de Acesso Google Sign-In:</span>
-              <p className="leading-normal font-medium">
-                Se você tentar entrar com Google e nada acontecer (ou a janela fechar sem logar), é porque o <strong>Iframe do AI Studio</strong> ou cookies externos estão restringindo o popup. Clique no botão de <strong>Nova Aba ↗</strong> no canto superior do painel para abrir o sistema diretamente!
-              </p>
-            </div>
-
-            {/* Google Config Guide / Help */}
-            <div className="mt-3 text-center">
-              <button
-                type="button"
-                onClick={() => setShowGoogleConfigGuide(!showGoogleConfigGuide)}
-                className="text-[10px] text-indigo-600 hover:text-indigo-800 font-bold hover:underline inline-flex items-center gap-1 cursor-pointer transition-colors"
-                id="toggle-guide-btn"
-              >
-                <HelpCircle className="w-3.5 h-3.5" />
-                {showGoogleConfigGuide ? 'Ocultar instruções de configuração' : 'Dica: Como habilitar o Google no meu Firebase?'}
-              </button>
-            </div>
-
-            {showGoogleConfigGuide && (
-              <div className="mt-3 p-4 bg-indigo-50/50 border border-indigo-100 rounded-2xl text-[10px] text-slate-650 leading-relaxed font-semibold transition-all animate-fade-in space-y-3 text-left">
-                <div>
-                  <p className="font-extrabold text-indigo-900 uppercase tracking-wider text-[9px] mb-1">1. Liberar Domínio de Acesso (Corrige "auth/unauthorized-domain"):</p>
-                  <p className="font-medium text-slate-750 mb-1">O Firebase exige a homologação de quais domínios podem iniciar a autenticação por popup.</p>
-                  <ol className="list-decimal list-inside space-y-1 font-medium text-slate-700">
-                    <li>Acesse o <a href="https://console.firebase.google.com/" target="_blank" rel="noopener noreferrer" className="text-indigo-650 hover:underline font-bold">Firebase Console ↗</a> e abra o projeto <strong className="text-slate-800">financas-ebd</strong>.</li>
-                    <li>No menu lateral esquerdo, vá em <strong className="text-slate-800">Authentication</strong>.</li>
-                    <li>Clique na aba <strong className="text-slate-850">Settings</strong> (Configurações) no topo.</li>
-                    <li>No menu esquerdo que aparecerá, selecione <strong className="text-slate-850">Authorized domains</strong> (Domínios autorizados).</li>
-                    <li>Clique em <strong className="text-indigo-600">Add domain</strong> (Adicionar domínio) e registre os seguintes domínios do seu applet:
-                      <ul className="list-disc list-inside ml-4 mt-1 text-slate-600 space-y-0.5 font-mono text-[9px]">
-                        <li>ais-dev-yg7iuqllq2nwibcqkxsu43-520053391223.us-east1.run.app</li>
-                        <li>ais-pre-yg7iuqllq2nwibcqkxsu43-520053391223.us-east1.run.app</li>
-                      </ul>
-                    </li>
-                  </ol>
-                </div>
-
-                <div className="border-t border-slate-200/50 pt-2">
-                  <p className="font-extrabold text-indigo-900 uppercase tracking-wider text-[9px] mb-1">2. Vincular seu Firebase financas-ebd ao Código:</p>
-                  <p className="font-medium text-slate-755 mb-1.5">Configure as variáveis de ambiente das credenciais Web do seu Firebase no menu <strong className="text-slate-800">Settings</strong> do AI Studio (ou em seu arquivo <code className="bg-slate-100 px-1 py-0.5 rounded text-[8px] font-mono font-bold">.env</code>):</p>
-                  <ul className="space-y-1 font-mono text-[9px] text-slate-600 bg-slate-100/60 p-2 rounded-xl border border-slate-200/40">
-                    <li>VITE_FIREBASE_API_KEY=<span className="text-indigo-600 font-bold">&lt;Sua_ApiKey_Web&gt;</span></li>
-                    <li>VITE_FIREBASE_AUTH_DOMAIN=financas-ebd.firebaseapp.com</li>
-                    <li>VITE_FIREBASE_PROJECT_ID=financas-ebd</li>
-                    <li>VITE_FIREBASE_STORAGE_BUCKET=financas-ebd.firebasestorage.app</li>
-                    <li>VITE_FIREBASE_MESSAGING_SENDER_ID=<span className="text-indigo-600 font-bold">&lt;Seu_Sender_ID&gt;</span></li>
-                    <li>VITE_FIREBASE_APP_ID=<span className="text-indigo-600 font-bold">&lt;Seu_App_ID_Web&gt;</span></li>
-                  </ul>
-                </div>
-
-                <div className="border-t border-slate-200/50 pt-2 text-[8px] text-slate-500 font-medium">
-                  <strong>Nota:</strong> Ative também o provedor de login <strong className="text-slate-700">Google</strong> na aba "Sign-in method" em seu console do Firebase se ainda não tiver feito!
-                </div>
-              </div>
-            )}
 
             <div className="pt-4 border-t border-slate-100 flex items-center justify-between text-[10px] text-slate-400 font-semibold font-mono">
               <span className="flex items-center gap-1">
