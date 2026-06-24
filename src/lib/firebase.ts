@@ -61,33 +61,57 @@ export type { FirebaseUser };
  * Saves the entire application state (excluding currentUser session) to Firestore for any authenticated user.
  */
 export async function saveStateToFirestore(userId: string, stateData: any) {
-  try {
-    const userDocRef = doc(db, "ebd_states", "shared_church_ebd");
-    // Ensure currentUser is null so credentials/local sessions are kept local
-    const stateToSave = {
-      ...stateData,
-      currentUser: null,
-      updatedAt: new Date().toISOString()
-    };
-    await setDoc(userDocRef, stateToSave);
-    console.log("State durably persisted to Google Firestore (shared_church_ebd)!");
-  } catch (err) {
-    console.error("Error saving state to Firestore:", err);
-  }
+  const savePromise = (async () => {
+    try {
+      const userDocRef = doc(db, "ebd_states", "shared_church_ebd");
+      // Ensure currentUser is null so credentials/local sessions are kept local
+      const stateToSave = {
+        ...stateData,
+        currentUser: null,
+        updatedAt: new Date().toISOString()
+      };
+      await setDoc(userDocRef, stateToSave);
+      console.log("State durably persisted to Google Firestore (shared_church_ebd)!");
+      return true;
+    } catch (err) {
+      console.error("Error saving state to Firestore:", err);
+      return false;
+    }
+  })();
+
+  const timeoutPromise = new Promise<boolean>((resolve) => 
+    setTimeout(() => {
+      console.warn("Firestore save operation timed out after 3000ms.");
+      resolve(false);
+    }, 3000)
+  );
+
+  return Promise.race([savePromise, timeoutPromise]);
 }
 
 /**
- * Loads the application state from Firestore.
+ * Loads the application state from Firestore, with a robust safety timeout.
  */
 export async function loadStateFromFirestore(userId: string) {
-  try {
-    const userDocRef = doc(db, "ebd_states", "shared_church_ebd");
-    const docSnap = await getDoc(userDocRef);
-    if (docSnap.exists()) {
-      return docSnap.data();
+  const fetchPromise = (async () => {
+    try {
+      const userDocRef = doc(db, "ebd_states", "shared_church_ebd");
+      const docSnap = await getDoc(userDocRef);
+      if (docSnap.exists()) {
+        return docSnap.data();
+      }
+    } catch (err) {
+      console.error("Error loading state from Firestore:", err);
     }
-  } catch (err) {
-    console.error("Error loading state from Firestore:", err);
-  }
-  return null;
+    return null;
+  })();
+
+  const timeoutPromise = new Promise<null>((resolve) => 
+    setTimeout(() => {
+      console.warn("Firestore load operation timed out after 3000ms. Falling back to local state to prevent login hang.");
+      resolve(null);
+    }, 3000)
+  );
+
+  return Promise.race([fetchPromise, timeoutPromise]);
 }

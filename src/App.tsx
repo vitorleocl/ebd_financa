@@ -88,9 +88,9 @@ export default function App() {
       if (fbUser) {
         try {
           const savedState = await loadStateFromFirestore(fbUser.uid);
-          if (savedState) {
-            setState(current => {
-              const updatedState = { ...current };
+          setState(current => {
+            const updatedState = { ...current };
+            if (savedState) {
               updatedState.boxes = savedState.boxes || updatedState.boxes;
               updatedState.categories = savedState.categories || updatedState.categories;
               updatedState.transactions = savedState.transactions || updatedState.transactions;
@@ -98,39 +98,39 @@ export default function App() {
               updatedState.closings = savedState.closings || updatedState.closings;
               updatedState.auditLogs = savedState.auditLogs || updatedState.auditLogs;
               updatedState.users = savedState.users || updatedState.users;
+            }
 
-              // Check if currently authenticated user email's role has changed in the user list
-              const emailLower = fbUser.email?.toLowerCase().trim() || '';
-              let assignedRole: UserRole = 'VISITANTE';
-              let userDisplayName = fbUser.displayName || fbUser.email?.split('@')[0] || 'Membro';
+            // Check if currently authenticated user email's role has changed in the user list
+            const emailLower = fbUser.email?.toLowerCase().trim() || '';
+            let assignedRole: UserRole = 'VISITANTE';
+            let userDisplayName = fbUser.displayName || fbUser.email?.split('@')[0] || 'Membro';
 
-              if (
-                emailLower === 'vitorleonardoc@gmail.com' || 
-                emailLower === 'vitorleonardocl@gmail.com' || 
-                emailLower === 'vitorleonardocl@gmail.com.br'
-              ) {
-                assignedRole = 'MASTER';
-                userDisplayName = 'Vitor Leonardo';
-              } else {
-                const registeredUser = updatedState.users.find(u => u.username.toLowerCase().trim() === emailLower);
-                if (registeredUser) {
-                  assignedRole = registeredUser.role;
-                  userDisplayName = registeredUser.name;
-                }
+            if (
+              emailLower === 'vitorleonardoc@gmail.com' || 
+              emailLower === 'vitorleonardocl@gmail.com' || 
+              emailLower === 'vitorleonardocl@gmail.com.br'
+            ) {
+              assignedRole = 'MASTER';
+              userDisplayName = 'Vitor Leonardo';
+            } else {
+              const registeredUser = updatedState.users.find(u => u.username.toLowerCase().trim() === emailLower);
+              if (registeredUser) {
+                assignedRole = registeredUser.role;
+                userDisplayName = registeredUser.name;
               }
+            }
 
-              // Update context user session to align with the database
-              updatedState.currentUser = {
-                id: `fb-${fbUser.uid}`,
-                name: userDisplayName,
-                username: fbUser.email || '',
-                role: assignedRole,
-                avatarColor: assignedRole === 'MASTER' ? 'bg-indigo-900' : assignedRole === 'TESOUREIRO' ? 'bg-blue-600' : assignedRole === 'SECRETARIA' ? 'bg-indigo-600' : assignedRole === 'DIRIGENTE' ? 'bg-emerald-600' : 'bg-slate-500'
-              };
+            // Update context user session to align with the database
+            updatedState.currentUser = {
+              id: `fb-${fbUser.uid}`,
+              name: userDisplayName,
+              username: fbUser.email || '',
+              role: assignedRole,
+              avatarColor: assignedRole === 'MASTER' ? 'bg-indigo-900' : assignedRole === 'TESOUREIRO' ? 'bg-blue-600' : assignedRole === 'SECRETARIA' ? 'bg-indigo-600' : assignedRole === 'DIRIGENTE' ? 'bg-emerald-600' : 'bg-slate-500'
+            };
 
-              return updatedState;
-            });
-          }
+            return updatedState;
+          });
         } catch (err) {
           console.error("Erro ao sincronizar login ativo com Firestore:", err);
         }
@@ -292,7 +292,9 @@ export default function App() {
       }
     } catch (error: any) {
       console.error("Erro Google Sign-In via Firebase:", error);
-      setLoginError(`Erro de Login Google: ${getFriendlyFirebaseError(error.code || error.message)}`);
+      const friendlyMsg = getFriendlyFirebaseError(error.code || error.message);
+      const rawDetails = error.message && error.message !== error.code ? ` (Mensagem técnica: ${error.message})` : '';
+      setLoginError(`Erro de Login Google: ${friendlyMsg}${rawDetails}`);
     }
   };
 
@@ -503,6 +505,8 @@ export default function App() {
         return 'A senha fornecida é muito fraca (pelo menos 6 caracteres).';
       case 'auth/invalid-credential':
         return 'Credenciais de acesso incorretas ou expiradas.';
+      case 'auth/unauthorized-domain':
+        return `O domínio "${window.location.hostname}" não está autorizado no console do seu Firebase. Para corrigir, acesse o Firebase Console > Authentication > Settings > Authorized Domains e adicione "${window.location.hostname}" à lista.`;
       case 'auth/popup-closed-by-user':
         return 'O popup de autenticação do Google foi fechado antes de concluir o acesso. Isso pode ocorrer caso você feche a janela ou se o Provedor Google não estiver ativo no console do seu Firebase.';
       case 'auth/cancelled-popup-request':
