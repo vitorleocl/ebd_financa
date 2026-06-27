@@ -23,7 +23,8 @@ import {
   addDoc,
   getDocs,
   query,
-  orderBy
+  orderBy,
+  onSnapshot
 } from "firebase/firestore";
 
 import firebaseConfig from "../../firebase-applet-config.json";
@@ -53,7 +54,9 @@ export {
   signOut,
   onAuthStateChanged,
   GoogleAuthProvider,
-  signInWithPopup
+  signInWithPopup,
+  onSnapshot,
+  doc
 };
 export type { FirebaseUser };
 

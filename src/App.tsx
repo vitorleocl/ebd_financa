@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { AppState, getInitialState, saveState, recalculateBalances, addAuditLog } from './data/stateManager';
 import { User, BoxId, Transaction, WeeklyClosing as ClosingType, Person, UserRole } from './types';
 import { 
@@ -13,6 +13,8 @@ import {
 } from 'lucide-react';
 import { 
   auth, 
+  db,
+  doc,
   signInWithEmailAndPassword, 
   createUserWithEmailAndPassword, 
   signOut as firebaseSignOut,
@@ -20,7 +22,8 @@ import {
   loadStateFromFirestore,
   GoogleAuthProvider,
   signInWithPopup,
-  onAuthStateChanged
+  onAuthStateChanged,
+  onSnapshot
 } from './lib/firebase';
 
 // Import our modular subcomponents
@@ -42,6 +45,9 @@ export default function App() {
     }
     return initial;
   });
+
+  // Track if a state change came from a remote Firestore snapshot to prevent loop
+  const isRemoteUpdateRef = useRef(false);
   
   // Login input fields
   const [usernameInput, setUsernameInput] = useState('');
@@ -81,80 +87,114 @@ export default function App() {
     saveState(state);
   }, [state]);
 
-  // Synchronize active authentication state changes and roles
-
+  // Synchronize active authentication state changes and roles with real-time Firestore sync
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (fbUser) => {
+    let unsubscribeSnapshot: (() => void) | null = null;
+
+    const unsubscribeAuth = onAuthStateChanged(auth, async (fbUser) => {
       if (fbUser) {
+        if (unsubscribeSnapshot) {
+          unsubscribeSnapshot();
+          unsubscribeSnapshot = null;
+        }
+
         try {
-          const savedState = await loadStateFromFirestore(fbUser.uid);
-          setState(current => {
-            const updatedState = { ...current };
-            if (savedState) {
-              updatedState.boxes = savedState.boxes || updatedState.boxes;
-              updatedState.categories = savedState.categories || updatedState.categories;
-              updatedState.transactions = savedState.transactions || updatedState.transactions;
-              updatedState.people = savedState.people || updatedState.people;
-              updatedState.closings = savedState.closings || updatedState.closings;
-              updatedState.auditLogs = savedState.auditLogs || updatedState.auditLogs;
-              updatedState.users = savedState.users || updatedState.users;
-            }
+          const docRef = doc(db, "ebd_states", "shared_church_ebd");
+          unsubscribeSnapshot = onSnapshot(docRef, (docSnap) => {
+            if (docSnap.exists()) {
+              const savedState = docSnap.data();
+              
+              // Mark that this update comes from the remote database to avoid trigger save loop
+              isRemoteUpdateRef.current = true;
 
-            // Check if currently authenticated user email's role has changed in the user list
-            const emailLower = fbUser.email?.toLowerCase().trim() || '';
-            let assignedRole: UserRole = 'VISITANTE';
-            let userDisplayName = fbUser.displayName || fbUser.email?.split('@')[0] || 'Membro';
+              setState(current => {
+                const updatedState = { ...current };
+                
+                updatedState.boxes = savedState.boxes || updatedState.boxes;
+                updatedState.categories = savedState.categories || updatedState.categories;
+                updatedState.transactions = savedState.transactions || updatedState.transactions;
+                updatedState.people = savedState.people || updatedState.people;
+                updatedState.closings = savedState.closings || updatedState.closings;
+                updatedState.auditLogs = savedState.auditLogs || updatedState.auditLogs;
+                updatedState.users = savedState.users || updatedState.users;
 
-            if (
-              emailLower === 'vitorleonardoc@gmail.com' || 
-              emailLower === 'vitorleonardocl@gmail.com' || 
-              emailLower === 'vitorleonardocl@gmail.com.br'
-            ) {
-              assignedRole = 'MASTER';
-              userDisplayName = 'Vitor Leonardo';
-            }
+                // Check if currently authenticated user email's role has changed in the user list
+                const emailLower = fbUser.email?.toLowerCase().trim() || '';
+                let assignedRole: UserRole = 'VISITANTE';
+                let userDisplayName = fbUser.displayName || fbUser.email?.split('@')[0] || 'Membro';
 
-            const registeredUserIndex = updatedState.users.findIndex(u => u.username.toLowerCase().trim() === emailLower);
-            if (registeredUserIndex >= 0) {
-              const registeredUser = updatedState.users[registeredUserIndex];
-              if (assignedRole !== 'MASTER') {
-                assignedRole = registeredUser.role;
-              }
-              userDisplayName = registeredUser.name;
+                if (
+                  emailLower === 'vitorleonardoc@gmail.com' || 
+                  emailLower === 'vitorleonardocl@gmail.com' || 
+                  emailLower === 'vitorleonardocl@gmail.com.br'
+                ) {
+                  assignedRole = 'MASTER';
+                  userDisplayName = 'Vitor Leonardo';
+                }
+
+                const registeredUserIndex = updatedState.users.findIndex(u => u.username.toLowerCase().trim() === emailLower);
+                if (registeredUserIndex >= 0) {
+                  const registeredUser = updatedState.users[registeredUserIndex];
+                  if (assignedRole !== 'MASTER') {
+                    assignedRole = registeredUser.role;
+                  }
+                  userDisplayName = registeredUser.name;
+                } else {
+                  // Add them automatically to state.users so they show up in UsersManagement for administration
+                  const newUserObj = {
+                    id: `fb-${fbUser.uid}`,
+                    name: userDisplayName,
+                    username: emailLower,
+                    role: assignedRole,
+                    avatarColor: assignedRole === 'MASTER' ? 'bg-indigo-900' : 'bg-slate-500'
+                  };
+                  updatedState.users.push(newUserObj);
+                }
+
+                // Update context user session to align with the database
+                updatedState.currentUser = {
+                  id: `fb-${fbUser.uid}`,
+                  name: userDisplayName,
+                  username: fbUser.email || '',
+                  role: assignedRole,
+                  avatarColor: assignedRole === 'MASTER' ? 'bg-indigo-900' : assignedRole === 'TESOUREIRO' ? 'bg-blue-600' : assignedRole === 'SECRETARIA' ? 'bg-indigo-600' : assignedRole === 'DIRIGENTE' ? 'bg-emerald-600' : 'bg-slate-500'
+                };
+
+                return updatedState;
+              });
             } else {
-              // Add them automatically to state.users so they show up in UsersManagement for administration
-              const newUserObj = {
-                id: `fb-${fbUser.uid}`,
-                name: userDisplayName,
-                username: emailLower,
-                role: assignedRole,
-                avatarColor: assignedRole === 'MASTER' ? 'bg-indigo-900' : 'bg-slate-500'
-              };
-              updatedState.users.push(newUserObj);
+              // If no remote state is present, do a single one-time load or wait
+              console.log("No shared church EBD document found in Firestore.");
             }
-
-            // Update context user session to align with the database
-            updatedState.currentUser = {
-              id: `fb-${fbUser.uid}`,
-              name: userDisplayName,
-              username: fbUser.email || '',
-              role: assignedRole,
-              avatarColor: assignedRole === 'MASTER' ? 'bg-indigo-900' : assignedRole === 'TESOUREIRO' ? 'bg-blue-600' : assignedRole === 'SECRETARIA' ? 'bg-indigo-600' : assignedRole === 'DIRIGENTE' ? 'bg-emerald-600' : 'bg-slate-500'
-            };
-
-            return updatedState;
+          }, (err) => {
+            console.error("Erro no listener de Firestore onSnapshot:", err);
           });
         } catch (err) {
           console.error("Erro ao sincronizar login ativo com Firestore:", err);
         }
+      } else {
+        if (unsubscribeSnapshot) {
+          unsubscribeSnapshot();
+          unsubscribeSnapshot = null;
+        }
       }
     });
 
-    return () => unsubscribe();
+    return () => {
+      unsubscribeAuth();
+      if (unsubscribeSnapshot) {
+        unsubscribeSnapshot();
+      }
+    };
   }, []);
 
   // Sync state changes durably to Google Firestore if a Firebase User is logged in
   useEffect(() => {
+    if (isRemoteUpdateRef.current) {
+      isRemoteUpdateRef.current = false;
+      return;
+    }
+
     if (state.currentUser && state.currentUser.id.startsWith('fb-')) {
       const fbUserId = state.currentUser.id.replace('fb-', '');
       setSyncingFirestore(true);
