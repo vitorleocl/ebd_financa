@@ -210,8 +210,69 @@ export default function App() {
                 return updatedState;
               });
             } else {
-              // If no remote state is present, do a single one-time load or wait
-              console.log("No shared church EBD document found in Firestore.");
+              console.log("No shared church EBD document found in Firestore. Initializing with local state...");
+              // Initialize with default state
+              const defaultState = getInitialState();
+              saveStateToFirestore(fbUser.uid, defaultState).then(() => {
+                console.log("Firestore state successfully initialized on-demand.");
+              }).catch(err => {
+                console.error("Failed to initialize Firestore state on-demand:", err);
+              });
+
+              // Log user in locally to avoid hanging login page
+              setState(current => {
+                const updatedState = { ...current };
+                const emailLower = fbUser.email?.toLowerCase().trim() || '';
+                let assignedRole: UserRole = 'VISITANTE';
+                let userDisplayName = fbUser.displayName || fbUser.email?.split('@')[0] || 'Membro';
+
+                if (
+                  emailLower === 'vitorleonardoc@gmail.com' || 
+                  emailLower === 'vitorleonardocl@gmail.com' || 
+                  emailLower === 'vitorleonardocl@gmail.com.br'
+                ) {
+                  assignedRole = 'MASTER';
+                  userDisplayName = 'Vitor Leonardo';
+                }
+
+                const registeredUserIndex = updatedState.users.findIndex(u => u.username.toLowerCase().trim() === emailLower);
+                if (registeredUserIndex >= 0) {
+                  const registeredUser = updatedState.users[registeredUserIndex];
+                  if (assignedRole !== 'MASTER') {
+                    assignedRole = registeredUser.role;
+                  }
+                  userDisplayName = registeredUser.name;
+                } else {
+                  const newUserObj = {
+                    id: `fb-${fbUser.uid}`,
+                    name: userDisplayName,
+                    username: emailLower,
+                    role: assignedRole,
+                    avatarColor: assignedRole === 'MASTER' ? 'bg-indigo-900' : 'bg-slate-500'
+                  };
+                  updatedState.users.push(newUserObj);
+                }
+
+                if (!current.currentUser) {
+                  setTimeout(() => {
+                    if (assignedRole === 'SECRETARIA') {
+                      setActiveTab('caixas');
+                    } else {
+                      setActiveTab('dashboard');
+                    }
+                  }, 0);
+                }
+
+                updatedState.currentUser = {
+                  id: `fb-${fbUser.uid}`,
+                  name: userDisplayName,
+                  username: fbUser.email || '',
+                  role: assignedRole,
+                  avatarColor: assignedRole === 'MASTER' ? 'bg-indigo-900' : assignedRole === 'TESOUREIRO' ? 'bg-blue-600' : assignedRole === 'SECRETARIA' ? 'bg-indigo-600' : assignedRole === 'DIRIGENTE' ? 'bg-emerald-600' : 'bg-slate-500'
+                };
+
+                return updatedState;
+              });
             }
           }, (err) => {
             console.error("Erro no listener de Firestore onSnapshot:", err);
@@ -318,21 +379,41 @@ export default function App() {
     }
   };
 
-  // Google Login click handler via Firebase Auth Popup / Redirect (smart mobile routing)
+  // Google Login click handler via Firebase Auth Popup with Redirect fallback
   const handleGoogleLoginClick = async () => {
     setLoginError(null);
     try {
       const provider = new GoogleAuthProvider();
+      // Force account selection to allow switching between vitorleonardocl@gmail.com and eduardasoares86617@gmail.com
+      provider.setCustomParameters({ prompt: 'select_account' });
       
       const isIframe = window.self !== window.top;
       const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
 
-      if (isMobile && !isIframe) {
-        console.log("Dispositivo móvel detectado fora de iframe. Iniciando login via signInWithRedirect...");
-        await signInWithRedirect(auth, provider);
-      } else {
-        console.log("Dispositivo desktop ou dentro de iframe detectado. Iniciando login via signInWithPopup...");
+      if (isIframe) {
+        console.log("App carregado dentro de um Iframe. Forçando signInWithPopup...");
         await signInWithPopup(auth, provider);
+      } else {
+        // Try popup first because it doesn't reload the page and prevents loss of state/session.
+        // It works perfectly in most mobile browsers (iOS Safari, Android Chrome) when triggered by a click.
+        try {
+          console.log("Iniciando login do Google via signInWithPopup...");
+          await signInWithPopup(auth, provider);
+        } catch (popupError: any) {
+          console.warn("signInWithPopup falhou, tentando fallback via signInWithRedirect...", popupError);
+          // If the popup was blocked, closed prematurely, or we are on mobile and popup failed, use redirect
+          if (
+            popupError.code === 'auth/popup-blocked' || 
+            popupError.code === 'auth/cancelled-popup-request' ||
+            popupError.code === 'auth/popup-closed-by-user' ||
+            isMobile
+          ) {
+            console.log("Acionando fallback do Google via signInWithRedirect...");
+            await signInWithRedirect(auth, provider);
+          } else {
+            throw popupError;
+          }
+        }
       }
     } catch (error: any) {
       console.error("Erro Google Sign-In via Firebase:", error);
