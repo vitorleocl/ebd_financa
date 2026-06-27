@@ -6,6 +6,7 @@
 import { useState } from 'react';
 import { Transaction, Category, Box } from '../types';
 import { FileDown, Printer, Search, Calendar, Landmark, Tag, User, Layers, ArrowUpRight, ArrowDownRight, TrendingUp } from 'lucide-react';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 
 interface ReportsViewProps {
   transactions: Transaction[];
@@ -83,6 +84,79 @@ export default function ReportsView({
     .reduce((sum, t) => sum + t.amount, 0);
 
   const netBalance = totalInflow - totalOutflow;
+
+  // Compute data for recharts bar chart comparing the two boxes
+  const getChartData = () => {
+    // We want to calculate the running balance of each box chronologically.
+    // Get all approved transactions sorted by date.
+    const approvedTxs = [...transactions]
+      .filter(t => t.isApproved)
+      .sort((a, b) => a.date.localeCompare(b.date));
+
+    // Get initial balances
+    let ebdBalance = boxes.find(b => b.id === 'CAIXA_5_EBD')?.initialBalance || 0;
+    let licoesBalance = boxes.find(b => b.id === 'CAIXA_LICOES')?.initialBalance || 0;
+
+    // Group transactions by date
+    const txsByDate: Record<string, Transaction[]> = {};
+    approvedTxs.forEach(t => {
+      if (!txsByDate[t.date]) {
+        txsByDate[t.date] = [];
+      }
+      txsByDate[t.date].push(t);
+    });
+
+    const uniqueDates = Object.keys(txsByDate).sort();
+
+    if (uniqueDates.length === 0) {
+      return [
+        {
+          formattedDate: 'Inicial',
+          'Caixa 5% EBD': ebdBalance,
+          'Caixa Lições': licoesBalance
+        }
+      ];
+    }
+
+    const dataPoints = uniqueDates.map(date => {
+      const dayTxs = txsByDate[date];
+      dayTxs.forEach(t => {
+        if (t.boxId === 'CAIXA_5_EBD') {
+          if (t.type === 'ENTRADA') ebdBalance += t.amount;
+          else ebdBalance -= t.amount;
+        } else if (t.boxId === 'CAIXA_LICOES') {
+          if (t.type === 'ENTRADA') licoesBalance += t.amount;
+          else licoesBalance -= t.amount;
+        }
+      });
+
+      // Format date from "YYYY-MM-DD" to "DD/MM"
+      const [year, month, day] = date.split('-');
+      const formattedDate = day && month ? `${day}/${month}` : date;
+
+      return {
+        date,
+        formattedDate,
+        'Caixa 5% EBD': Number(ebdBalance.toFixed(2)),
+        'Caixa Lições': Number(licoesBalance.toFixed(2))
+      };
+    });
+
+    // To make sure there is a starting baseline, insert an initial state
+    const firstDate = uniqueDates[0];
+    const [year, month, day] = firstDate.split('-');
+    const prevDay = day ? String(Math.max(1, parseInt(day) - 1)).padStart(2, '0') : '01';
+    const initialPoint = {
+      date: 'inicial',
+      formattedDate: day && month ? `${prevDay}/${month}` : 'Início',
+      'Caixa 5% EBD': Number((boxes.find(b => b.id === 'CAIXA_5_EBD')?.initialBalance || 0).toFixed(2)),
+      'Caixa Lições': Number((boxes.find(b => b.id === 'CAIXA_LICOES')?.initialBalance || 0).toFixed(2))
+    };
+
+    return [initialPoint, ...dataPoints];
+  };
+
+  const chartData = getChartData();
 
   // Handle Export to CSV (Excel formatable)
   const handleExportCSV = () => {
@@ -288,6 +362,73 @@ export default function ReportsView({
             </span>
           </div>
 
+        </div>
+
+        {/* Gráfico de Comparação de Caixas (Oculto na impressão para economia de tinta) */}
+        <div className="bg-slate-50/50 rounded-2xl border border-slate-100 p-5 space-y-4 no-print">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <TrendingUp className="w-4 h-4 text-indigo-600" />
+              <h4 className="font-extrabold text-xs text-slate-800 uppercase tracking-wider">Evolução do Saldo dos Caixas</h4>
+            </div>
+            <span className="text-[10px] bg-indigo-50 text-indigo-700 font-bold px-2 py-0.5 rounded-full uppercase">
+              Saldo Acumulado
+            </span>
+          </div>
+          
+          <div className="h-72 w-full text-xs font-semibold">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart
+                data={chartData}
+                margin={{ top: 10, right: 10, left: 10, bottom: 5 }}
+              >
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
+                <XAxis 
+                  dataKey="formattedDate" 
+                  stroke="#64748b" 
+                  fontSize={11} 
+                  tickLine={false} 
+                  axisLine={false} 
+                />
+                <YAxis 
+                  stroke="#64748b" 
+                  fontSize={11} 
+                  tickLine={false} 
+                  axisLine={false}
+                  tickFormatter={(val) => `R$ ${val}`} 
+                />
+                <Tooltip 
+                  formatter={(value: any) => [formatCurrency(Number(value)), '']}
+                  contentStyle={{ 
+                    backgroundColor: '#ffffff', 
+                    borderRadius: '12px', 
+                    border: '1px solid #e2e8f0', 
+                    boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' 
+                  }}
+                  labelStyle={{ fontWeight: 'bold', color: '#1e293b', marginBottom: '4px' }}
+                />
+                <Legend 
+                  verticalAlign="top" 
+                  height={36} 
+                  iconType="circle" 
+                  iconSize={8}
+                  wrapperStyle={{ fontSize: '11px', fontWeight: 'bold' }}
+                />
+                <Bar 
+                  dataKey="Caixa 5% EBD" 
+                  fill="#4f46e5" 
+                  radius={[4, 4, 0, 0]} 
+                  maxBarSize={50}
+                />
+                <Bar 
+                  dataKey="Caixa Lições" 
+                  fill="#10b981" 
+                  radius={[4, 4, 0, 0]} 
+                  maxBarSize={50}
+                />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
         </div>
 
         {/* Main report items table */}
