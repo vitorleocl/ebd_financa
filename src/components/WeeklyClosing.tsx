@@ -26,6 +26,7 @@ interface WeeklyClosingProps {
   }) => void;
   onApproveClosing?: (closingId: string) => void;
   onDeleteClosing?: (closingId: string) => void;
+  onClearAllClosings?: () => void;
 }
 
 export default function WeeklyClosing({
@@ -35,7 +36,8 @@ export default function WeeklyClosing({
   onViewAta,
   onAddClosing,
   onApproveClosing,
-  onDeleteClosing
+  onDeleteClosing,
+  onClearAllClosings
 }: WeeklyClosingProps) {
   const [showClosingForm, setShowClosingForm] = useState(false);
   const [comments, setComments] = useState('');
@@ -308,9 +310,26 @@ export default function WeeklyClosing({
             <p className="text-[11px] text-slate-400 mt-0.5">Livro eletrônico de reconciliações aprovadas e pendentes</p>
           </div>
 
-          <span className="text-xs font-bold text-slate-500 bg-slate-50 border border-slate-200 rounded-full px-2.5 py-0.5">
-            {closings.length} atas fechadas
-          </span>
+          <div className="flex items-center gap-2">
+            <span className="text-xs font-bold text-slate-500 bg-slate-50 border border-slate-200 rounded-full px-2.5 py-0.5">
+              {closings.length} atas fechadas
+            </span>
+            {onClearAllClosings && closings.length > 0 && (currentUser?.role === 'MASTER' || currentUser?.role === 'TESOUREIRO') && (
+              <button
+                type="button"
+                onClick={() => {
+                  if (window.confirm("ATENÇÃO: Tem certeza de que deseja excluir permanentemente TODAS as atas de fechamento do sistema? Esta ação não pode ser desfeita e removerá todo o histórico de atas.")) {
+                    onClearAllClosings();
+                  }
+                }}
+                className="py-1 px-2.5 rounded bg-red-50 hover:bg-red-600 border border-red-200 text-red-600 hover:text-white font-bold text-[10px] duration-150 uppercase tracking-wide flex items-center gap-1 cursor-pointer"
+                id="clear-all-closings-btn"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                Limpar Arquivo
+              </button>
+            )}
+          </div>
         </div>
 
         <div className="overflow-x-auto">

@@ -168,6 +168,17 @@ export default function App() {
                   updatedState.users.push(newUserObj);
                 }
 
+                // If this is the initial login transition, route to correct default tab
+                if (!current.currentUser) {
+                  setTimeout(() => {
+                    if (assignedRole === 'SECRETARIA') {
+                      setActiveTab('caixas');
+                    } else {
+                      setActiveTab('dashboard');
+                    }
+                  }, 0);
+                }
+
                 // Update context user session to align with the database
                 updatedState.currentUser = {
                   id: `fb-${fbUser.uid}`,
@@ -293,85 +304,11 @@ export default function App() {
     setLoginError(null);
     try {
       const provider = new GoogleAuthProvider();
-      const result = await signInWithPopup(auth, provider);
-      const fbUser = result.user;
-      
-      if (fbUser) {
-        const rawUid = fbUser.uid;
-        const emailLower = fbUser.email?.toLowerCase().trim() || '';
-        const name = fbUser.displayName || fbUser.email?.split('@')[0] || 'Membro Google';
-
-        const updatedState = { ...state };
-
-        // Load the shared state from firestore so we have the latest registered users list!
-        try {
-          const savedState = await loadStateFromFirestore(rawUid);
-          if (savedState) {
-            updatedState.boxes = savedState.boxes || updatedState.boxes;
-            updatedState.categories = savedState.categories || updatedState.categories;
-            updatedState.transactions = savedState.transactions || updatedState.transactions;
-            updatedState.people = savedState.people || updatedState.people;
-            updatedState.closings = savedState.closings || updatedState.closings;
-            updatedState.auditLogs = savedState.auditLogs || updatedState.auditLogs;
-            updatedState.users = savedState.users || updatedState.users;
-          }
-        } catch (err) {
-          console.error("Erro ao sincronizar dados do Google Firestore:", err);
-        }
-
-        // Decide the role: default is VISITANTE unless Master email or pre-configured
-        let assignedRole: UserRole = 'VISITANTE';
-        if (
-          emailLower === 'vitorleonardoc@gmail.com' || 
-          emailLower === 'vitorleonardocl@gmail.com' || 
-          emailLower === 'vitorleonardocl@gmail.com.br'
-        ) {
-          assignedRole = 'MASTER';
-        } else {
-          // If the user has already been registered in the users array (e.g. pre-configured or updated by MASTER)
-          const existingUser = updatedState.users.find(u => u.username.toLowerCase().trim() === emailLower);
-          if (existingUser) {
-            assignedRole = existingUser.role;
-          }
-        }
-
-        updatedState.currentUser = {
-          id: `fb-${fbUser.uid}`,
-          name: name,
-          username: fbUser.email || '',
-          role: assignedRole,
-          avatarColor: assignedRole === 'MASTER' ? 'bg-indigo-900' : assignedRole === 'TESOUREIRO' ? 'bg-blue-600' : assignedRole === 'SECRETARIA' ? 'bg-indigo-600' : assignedRole === 'DIRIGENTE' ? 'bg-emerald-600' : 'bg-slate-500'
-        };
-
-        const existingInListIndex = updatedState.users.findIndex(u => u.username.toLowerCase().trim() === emailLower);
-        if (existingInListIndex >= 0) {
-          updatedState.users[existingInListIndex].id = `fb-${fbUser.uid}`;
-          updatedState.users[existingInListIndex].name = name;
-        } else {
-          updatedState.users.push({
-            id: `fb-${fbUser.uid}`,
-            name: name,
-            username: fbUser.email || '',
-            role: assignedRole,
-            avatarColor: assignedRole === 'MASTER' ? 'bg-indigo-900' : assignedRole === 'TESOUREIRO' ? 'bg-blue-600' : assignedRole === 'SECRETARIA' ? 'bg-indigo-600' : assignedRole === 'DIRIGENTE' ? 'bg-emerald-600' : 'bg-slate-500'
-          });
-        }
-
-        addAuditLog(updatedState, 'Login Google Concluido', `Acesso autenticado via Google Sign-In (${fbUser.email}) associado ao perfil ${assignedRole}.`, updatedState.currentUser);
-        
-        // Save to Firestore in a background promise so the UI transitions instantly and login never hangs
-        saveStateToFirestore(rawUid, updatedState).catch(err => {
-          console.error("Erro ao salvar dados novos do Google no Firestore:", err);
-        });
-
-        setState(updatedState);
-        
-        if (assignedRole === 'SECRETARIA') {
-          setActiveTab('caixas');
-        } else {
-          setActiveTab('dashboard');
-        }
-      }
+      await signInWithPopup(auth, provider);
+      // O listener onAuthStateChanged configurado no useEffect principal irá interceptar
+      // o login bem-sucedido, conectar-se em tempo real ao Firestore (onSnapshot),
+      // recuperar o estado mais atualizado, consultar a lista de usuários,
+      // definir o cargo (role) correto e ajustar o currentUser de forma segura e livre de condições de corrida.
     } catch (error: any) {
       console.error("Erro Google Sign-In via Firebase:", error);
       const friendlyMsg = getFriendlyFirebaseError(error.code || error.message);
@@ -422,81 +359,9 @@ export default function App() {
     e.preventDefault();
     setLoginError(null);
     try {
-      const userCredential = await signInWithEmailAndPassword(auth, firebaseEmail, firebasePassword);
-      const fbUser = userCredential.user;
-      
-      // Load their previously synced state from Firestore or stick to local if empty
-      const savedState = await loadStateFromFirestore(fbUser.uid);
-      
-      const updatedState = { ...state };
-      
-      if (savedState) {
-        // Sync whole loaded collection
-        updatedState.boxes = savedState.boxes || updatedState.boxes;
-        updatedState.categories = savedState.categories || updatedState.categories;
-        updatedState.transactions = savedState.transactions || updatedState.transactions;
-        updatedState.people = savedState.people || updatedState.people;
-        updatedState.closings = savedState.closings || updatedState.closings;
-        updatedState.auditLogs = savedState.auditLogs || updatedState.auditLogs;
-        updatedState.users = savedState.users || updatedState.users;
-      }
-
-      // Look for custom user metadata stored in state, or default role based on email/auth.
-      let assignedRole: UserRole = 'VISITANTE'; // fallback is now VISITANTE!
-      let userDisplayName = fbUser.displayName || fbUser.email?.split('@')[0] || 'Membro';
-      const emailLower = fbUser.email?.toLowerCase().trim() || '';
-
-      if (
-        emailLower === 'vitorleonardoc@gmail.com' || 
-        emailLower === 'vitorleonardocl@gmail.com' || 
-        emailLower === 'vitorleonardocl@gmail.com.br'
-      ) {
-        assignedRole = 'MASTER';
-        userDisplayName = 'Vitor Leonardo';
-      } else {
-        const registeredUser = updatedState.users.find(u => u.username.toLowerCase() === emailLower);
-        if (registeredUser) {
-          assignedRole = registeredUser.role;
-          userDisplayName = registeredUser.name;
-        } else if (savedState && savedState.currentUser) {
-          assignedRole = savedState.currentUser.role;
-          userDisplayName = savedState.currentUser.name;
-        } else {
-          // Look up by email conventions, or default to VISITANTE
-          if (fbUser.email?.includes('secretaria')) assignedRole = 'SECRETARIA';
-          else if (fbUser.email?.includes('tesouraria') || fbUser.email?.includes('tesoureiro')) assignedRole = 'TESOUREIRO';
-        }
-      }
-
-      updatedState.currentUser = {
-        id: `fb-${fbUser.uid}`,
-        name: userDisplayName,
-        username: fbUser.email || '',
-        role: assignedRole,
-        avatarColor: assignedRole === 'MASTER' ? 'bg-indigo-900' : assignedRole === 'TESOUREIRO' ? 'bg-blue-600' : assignedRole === 'SECRETARIA' ? 'bg-indigo-600' : assignedRole === 'DIRIGENTE' ? 'bg-emerald-600' : 'bg-slate-500'
-      };
-
-      // Safeguard email is present in users array
-      const hasSelfInUsers = updatedState.users.some(u => u.username.toLowerCase() === emailLower);
-      if (!hasSelfInUsers) {
-        updatedState.users.push({
-          id: `fb-${fbUser.uid}`,
-          name: userDisplayName,
-          username: fbUser.email || '',
-          role: assignedRole,
-          avatarColor: assignedRole === 'MASTER' ? 'bg-indigo-900' : assignedRole === 'TESOUREIRO' ? 'bg-blue-600' : assignedRole === 'SECRETARIA' ? 'bg-indigo-600' : assignedRole === 'DIRIGENTE' ? 'bg-emerald-600' : 'bg-slate-500'
-        });
-      }
-
-      addAuditLog(updatedState, 'Login Firebase', `Usuário ${userDisplayName} autenticado via Firebase Auth (${fbUser.email}).`, updatedState.currentUser);
-      setState(updatedState);
-      
-      if (assignedRole === 'SECRETARIA') {
-        setActiveTab('caixas');
-      } else {
-        setActiveTab('dashboard');
-      }
-      
+      await signInWithEmailAndPassword(auth, firebaseEmail, firebasePassword);
+      // O listener central onAuthStateChanged + onSnapshot irá carregar automaticamente os dados
+      // do Firestore e configurar o currentUser com o cargo (role) correto.
       setFirebaseEmail('');
       setFirebasePassword('');
     } catch (error: any) {
@@ -515,52 +380,9 @@ export default function App() {
     }
 
     try {
-      const userCredential = await createUserWithEmailAndPassword(auth, firebaseEmail, firebasePassword);
-      const fbUser = userCredential.user;
-      
-      const updatedState = { ...state };
-      
-      const emailLower = firebaseEmail.toLowerCase().trim();
-      let assignedRole: UserRole = 'VISITANTE'; // All register users default to VISITANTE
-      if (
-        emailLower === 'vitorleonardoc@gmail.com' || 
-        emailLower === 'vitorleonardocl@gmail.com' || 
-        emailLower === 'vitorleonardocl@gmail.com.br'
-      ) {
-        assignedRole = 'MASTER';
-      }
-
-      // Store user object session
-      updatedState.currentUser = {
-        id: `fb-${fbUser.uid}`,
-        name: firebaseName,
-        username: firebaseEmail,
-        role: assignedRole,
-        avatarColor: assignedRole === 'MASTER' ? 'bg-indigo-900' : 'bg-slate-500'
-      };
-
-      // Also register this user into our local system user directory
-      const isAlreadyInList = updatedState.users.some(u => u.username.toLowerCase() === emailLower);
-      if (!isAlreadyInList) {
-        updatedState.users.push({
-          id: `fb-${fbUser.uid}`,
-          name: firebaseName,
-          username: firebaseEmail,
-          role: assignedRole,
-          avatarColor: assignedRole === 'MASTER' ? 'bg-indigo-900' : 'bg-slate-500'
-        });
-      }
-
-      addAuditLog(updatedState, 'Registro Firebase', `Nova conta efetuada no Firebase Auth para ${firebaseName} (${firebaseEmail}) com cargo ${assignedRole}.`, updatedState.currentUser);
-      
-      // Save this initial state mapping immediately
-      await saveStateToFirestore(fbUser.uid, updatedState);
-      
-      setState(updatedState);
-      
-      setActiveTab('dashboard');
-
-      // Reset fields
+      await createUserWithEmailAndPassword(auth, firebaseEmail, firebasePassword);
+      // O listener central onAuthStateChanged + onSnapshot irá carregar e registrar o novo usuário
+      // no sistema como VISITANTE por padrão, salvando o novo perfil automaticamente no Firestore.
       setFirebaseEmail('');
       setFirebasePassword('');
       setFirebaseName('');
@@ -869,6 +691,22 @@ export default function App() {
 
       setState(updatedState);
     }
+  };
+
+  // Clear all closings (atas) from permanent archive
+  const handleClearAllClosings = () => {
+    const updatedState = { ...state };
+    updatedState.closings = [];
+    
+    // Audit Log
+    addAuditLog(
+      updatedState,
+      'Limpeza de Arquivo',
+      'Excluiu todas as atas de fechamento semanal do arquivo permanente.',
+      updatedState.currentUser
+    );
+
+    setState(updatedState);
   };
 
   // Student & Visitor registrant submittals (Secretary or Treasurer)
@@ -1454,6 +1292,7 @@ export default function App() {
                 onAddClosing={handleAddClosing}
                 onApproveClosing={handleApproveClosing}
                 onDeleteClosing={handleDeleteClosing}
+                onClearAllClosings={handleClearAllClosings}
               />
             )}
 
