@@ -7,13 +7,17 @@ interface UsersManagementProps {
   currentUser: User;
   onUpdateUsersList: (updatedUsers: (User & { passwordHash?: string })[]) => void;
   onLogAudit: (action: string, details: string) => void;
+  simulationRole: UserRole | null;
+  onSelectSimulationRole: (role: UserRole | null) => void;
 }
 
 export default function UsersManagement({ 
   users, 
   currentUser, 
   onUpdateUsersList, 
-  onLogAudit 
+  onLogAudit,
+  simulationRole,
+  onSelectSimulationRole
 }: UsersManagementProps) {
   const [editingUserId, setEditingUserId] = useState<string | null>(null);
   const [editName, setEditName] = useState('');
@@ -285,8 +289,24 @@ export default function UsersManagement({
                     Sessão Ativa
                   </span>
                 </td>
-                <td className="px-6 py-4 text-center text-[10px] text-slate-400 font-mono italic">
-                  Perfil de Acesso Atual
+                <td className="px-6 py-4 text-center">
+                  <div className="flex items-center justify-center gap-1.5">
+                    <span className="text-[10px] font-bold text-slate-500">Alternar Cargo:</span>
+                    <select
+                      value={simulationRole || 'MASTER'}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        onSelectSimulationRole(val === 'MASTER' ? null : val as UserRole);
+                      }}
+                      className="border border-slate-200 rounded-lg p-1 text-[10px] bg-white font-bold outline-none text-slate-700 cursor-pointer"
+                    >
+                      <option value="MASTER">MASTER</option>
+                      <option value="SECRETARIA">SECRETARIA</option>
+                      <option value="TESOUREIRO">TESOUREIRO</option>
+                      <option value="DIRIGENTE">DIRIGENTE</option>
+                      <option value="VISITANTE">VISITANTE</option>
+                    </select>
+                  </div>
                 </td>
               </tr>
 

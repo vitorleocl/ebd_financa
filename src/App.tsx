@@ -5,7 +5,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { AppState, getInitialState, saveState, recalculateBalances, addAuditLog } from './data/stateManager';
-import { User, BoxId, Transaction, WeeklyClosing as ClosingType, Person, UserRole } from './types';
+import { User, BoxId, Transaction, WeeklyClosing as ClosingType, Person, UserRole, AuditLog } from './types';
 import { 
   Lock, Landmark, ArrowLeftRight, PlusCircle, CalendarRange, 
   Users, BarChart3, History, LogOut, ShieldAlert, FileDown, FileUp, 
@@ -39,6 +39,77 @@ import UsersManagement from './components/UsersManagement';
 import TransactionReceipt from './components/TransactionReceipt';
 import AtaWeeklyClosing from './components/AtaWeeklyClosing';
 import LogoEBD from './components/LogoEBD';
+
+// Helper functions to merge local and remote lists to prevent data loss or duplicate transactions between devices
+const mergeAndSortTransactions = (local: Transaction[], remote: Transaction[]): Transaction[] => {
+  const map = new Map<string, Transaction>();
+  if (Array.isArray(remote)) remote.forEach(t => map.set(t.id, t));
+  if (Array.isArray(local)) {
+    local.forEach(t => {
+      if (!map.has(t.id)) {
+        map.set(t.id, t);
+      }
+    });
+  }
+  return Array.from(map.values()).sort((a, b) => {
+    const timeA = new Date(a.createdAt || a.id.replace('tx-', '')).getTime();
+    const timeB = new Date(b.createdAt || b.id.replace('tx-', '')).getTime();
+    return timeB - timeA;
+  });
+};
+
+const mergeUsers = (local: any[], remote: any[]): any[] => {
+  const map = new Map<string, any>();
+  if (Array.isArray(remote)) remote.forEach(u => map.set(u.username.toLowerCase().trim(), u));
+  if (Array.isArray(local)) {
+    local.forEach(u => {
+      const key = u.username.toLowerCase().trim();
+      if (!map.has(key)) {
+        map.set(key, u);
+      }
+    });
+  }
+  return Array.from(map.values());
+};
+
+const mergeArraysById = <T extends { id: string }>(local: T[], remote: T[]): T[] => {
+  const map = new Map<string, T>();
+  if (Array.isArray(remote)) remote.forEach(item => map.set(item.id, item));
+  if (Array.isArray(local)) {
+    local.forEach(item => {
+      if (!map.has(item.id)) {
+        map.set(item.id, item);
+      }
+    });
+  }
+  return Array.from(map.values());
+};
+
+const mergeClosings = (local: ClosingType[], remote: ClosingType[]): ClosingType[] => {
+  const map = new Map<string, ClosingType>();
+  if (Array.isArray(remote)) remote.forEach(c => map.set(c.id, c));
+  if (Array.isArray(local)) {
+    local.forEach(c => {
+      if (!map.has(c.id)) {
+        map.set(c.id, c);
+      }
+    });
+  }
+  return Array.from(map.values()).sort((a, b) => new Date(b.closedAt).getTime() - new Date(a.closedAt).getTime());
+};
+
+const mergeAuditLogs = (local: AuditLog[], remote: AuditLog[]): AuditLog[] => {
+  const map = new Map<string, AuditLog>();
+  if (Array.isArray(remote)) remote.forEach(l => map.set(l.id, l));
+  if (Array.isArray(local)) {
+    local.forEach(l => {
+      if (!map.has(l.id)) {
+        map.set(l.id, l);
+      }
+    });
+  }
+  return Array.from(map.values()).sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+};
 
 export default function App() {
   const [state, setState] = useState<AppState>(() => {
@@ -83,6 +154,9 @@ export default function App() {
     picture: string;
   } | null>(null);
 
+  // Role simulation state for Master
+  const [simulationRole, setSimulationRole] = useState<UserRole | null>(null);
+
   // Shell Layout tab routing
   const [activeTab, setActiveTab] = useState<string>('dashboard');
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -125,6 +199,45 @@ export default function App() {
           unsubscribeSnapshot = null;
         }
 
+        // OPTIMISTIC LOGIN LOAD: Configure current user optimistically and hide spinner instantly!
+        const emailLower = fbUser.email?.toLowerCase().trim() || '';
+        let assignedRole: UserRole = 'VISITANTE';
+        let userDisplayName = fbUser.displayName || fbUser.email?.split('@')[0] || 'Membro';
+
+        if (
+          emailLower === 'vitorleonardoc@gmail.com' || 
+          emailLower === 'vitorleonardocl@gmail.com' || 
+          emailLower === 'vitorleonardocl@gmail.com.br'
+        ) {
+          assignedRole = 'MASTER';
+          userDisplayName = 'Vitor Leonardo';
+        }
+
+        setState(current => {
+          if (current.currentUser && current.currentUser.username === emailLower) {
+            return current;
+          }
+          const updatedState = { ...current };
+          const registeredUser = updatedState.users.find(u => u.username.toLowerCase().trim() === emailLower);
+          if (registeredUser) {
+            if (assignedRole !== 'MASTER') {
+              assignedRole = registeredUser.role;
+            }
+            userDisplayName = registeredUser.name;
+          }
+          updatedState.currentUser = {
+            id: `fb-${fbUser.uid}`,
+            name: userDisplayName,
+            username: fbUser.email || '',
+            role: assignedRole,
+            avatarColor: assignedRole === 'MASTER' ? 'bg-indigo-900' : assignedRole === 'TESOUREIRO' ? 'bg-blue-600' : assignedRole === 'SECRETARIA' ? 'bg-indigo-600' : assignedRole === 'DIRIGENTE' ? 'bg-emerald-600' : 'bg-slate-500'
+          };
+          return updatedState;
+        });
+
+        // Instantly hide the loading screen so the app loads in milliseconds
+        setIsConnectingAuth(false);
+
         try {
           const docRef = doc(db, "ebd_states", "shared_church_ebd");
           unsubscribeSnapshot = onSnapshot(docRef, (docSnap) => {
@@ -134,35 +247,32 @@ export default function App() {
 
             if (docSnap.exists()) {
               const savedState = docSnap.data();
-              
-              // Normalize data to create a deterministic JSON string for comparison
-              const normalizedData = {
-                boxes: savedState.boxes || [],
-                categories: savedState.categories || [],
-                transactions: savedState.transactions || [],
-                people: savedState.people || [],
-                closings: savedState.closings || [],
-                auditLogs: savedState.auditLogs || [],
-                users: savedState.users || []
-              };
-              const dataStr = JSON.stringify(normalizedData);
-              
-              if (dataStr === lastSyncStringRef.current) {
-                return;
-              }
-              
-              lastSyncStringRef.current = dataStr;
 
               setState(current => {
                 const updatedState = { ...current };
                 
-                updatedState.boxes = savedState.boxes || updatedState.boxes;
-                updatedState.categories = savedState.categories || updatedState.categories;
-                updatedState.transactions = savedState.transactions || updatedState.transactions;
-                updatedState.people = savedState.people || updatedState.people;
-                updatedState.closings = savedState.closings || updatedState.closings;
-                updatedState.auditLogs = savedState.auditLogs || updatedState.auditLogs;
-                updatedState.users = savedState.users || updatedState.users;
+                // Merge lists instead of overwriting, preventing any data loss or duplicates between devices!
+                if (savedState.boxes && Array.isArray(savedState.boxes)) {
+                  updatedState.boxes = mergeArraysById(current.boxes || [], savedState.boxes);
+                }
+                if (savedState.categories && Array.isArray(savedState.categories)) {
+                  updatedState.categories = mergeArraysById(current.categories || [], savedState.categories);
+                }
+                if (savedState.transactions && Array.isArray(savedState.transactions)) {
+                  updatedState.transactions = mergeAndSortTransactions(current.transactions || [], savedState.transactions);
+                }
+                if (savedState.people && Array.isArray(savedState.people)) {
+                  updatedState.people = mergeArraysById(current.people || [], savedState.people);
+                }
+                if (savedState.closings && Array.isArray(savedState.closings)) {
+                  updatedState.closings = mergeClosings(current.closings || [], savedState.closings);
+                }
+                if (savedState.auditLogs && Array.isArray(savedState.auditLogs)) {
+                  updatedState.auditLogs = mergeAuditLogs(current.auditLogs || [], savedState.auditLogs);
+                }
+                if (savedState.users && Array.isArray(savedState.users)) {
+                  updatedState.users = mergeUsers(current.users || [], savedState.users);
+                }
 
                 // Check if currently authenticated user email's role has changed in the user list
                 const emailLower = fbUser.email?.toLowerCase().trim() || '';
@@ -216,6 +326,18 @@ export default function App() {
                   role: assignedRole,
                   avatarColor: assignedRole === 'MASTER' ? 'bg-indigo-900' : assignedRole === 'TESOUREIRO' ? 'bg-blue-600' : assignedRole === 'SECRETARIA' ? 'bg-indigo-600' : assignedRole === 'DIRIGENTE' ? 'bg-emerald-600' : 'bg-slate-500'
                 };
+
+                // Normalize and serialize the newly merged state to set as the sync reference string
+                const normalizedCurrent = {
+                  boxes: updatedState.boxes || [],
+                  categories: updatedState.categories || [],
+                  transactions: updatedState.transactions || [],
+                  people: updatedState.people || [],
+                  closings: updatedState.closings || [],
+                  auditLogs: updatedState.auditLogs || [],
+                  users: updatedState.users || []
+                };
+                lastSyncStringRef.current = JSON.stringify(normalizedCurrent);
 
                 return updatedState;
               });
@@ -281,8 +403,24 @@ export default function App() {
                   avatarColor: assignedRole === 'MASTER' ? 'bg-indigo-900' : assignedRole === 'TESOUREIRO' ? 'bg-blue-600' : assignedRole === 'SECRETARIA' ? 'bg-indigo-600' : assignedRole === 'DIRIGENTE' ? 'bg-emerald-600' : 'bg-slate-500'
                 };
 
+                // Normalize and serialize the newly initialized state to set as the sync reference string
+                const normalizedCurrent = {
+                  boxes: updatedState.boxes || [],
+                  categories: updatedState.categories || [],
+                  transactions: updatedState.transactions || [],
+                  people: updatedState.people || [],
+                  closings: updatedState.closings || [],
+                  auditLogs: updatedState.auditLogs || [],
+                  users: updatedState.users || []
+                };
+                lastSyncStringRef.current = JSON.stringify(normalizedCurrent);
+
                 return updatedState;
               });
+
+              // Also immediately set loading flags to false so user is unblocked
+              hasLoadedFromFirestoreRef.current = true;
+              setIsConnectingAuth(false);
             }
           }, (err) => {
             console.error("Erro no listener de Firestore onSnapshot:", err);
@@ -1075,10 +1213,28 @@ export default function App() {
   }
 
   // Active User session context
-  const user = state.currentUser;
+  const user = state.currentUser ? {
+    ...state.currentUser,
+    role: (simulationRole && state.currentUser.role === 'MASTER') ? simulationRole : state.currentUser.role
+  } : null;
 
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col font-sans">
+      
+      {simulationRole && state.currentUser?.role === 'MASTER' && (
+        <div className="bg-amber-600 text-white text-xs font-bold py-2 px-4 flex justify-between items-center shadow-lg animate-fade-in z-50 relative">
+          <div className="flex items-center gap-2">
+            <span className="w-2.5 h-2.5 rounded-full bg-white animate-pulse" />
+            <span>Você está operando sob o perfil de simulação: <strong>{simulationRole}</strong> (Seu login real é MASTER)</span>
+          </div>
+          <button
+            onClick={() => setSimulationRole(null)}
+            className="bg-white text-amber-700 hover:bg-slate-100 px-3 py-1 rounded-lg font-black tracking-wide uppercase text-[10px] transition-colors cursor-pointer"
+          >
+            Voltar para MASTER
+          </button>
+        </div>
+      )}
       
       {/* Visual Navigation Header (Logo, profile selection and manual offline cloud controls) */}
       <nav className="bg-slate-900 border-b border-slate-800 text-white shadow-sm z-30 sticky top-0 no-print">
@@ -1465,20 +1621,22 @@ export default function App() {
               <AuditoryView logs={state.auditLogs} />
             )}
 
-            {activeTab === 'usuarios' && user.role === 'MASTER' && (
+            {activeTab === 'usuarios' && state.currentUser?.role === 'MASTER' && (
               <UsersManagement
                 users={state.users}
-                currentUser={user}
+                currentUser={state.currentUser}
                 onUpdateUsersList={(updatedUsers) => {
                   setState(current => ({ ...current, users: updatedUsers }));
                 }}
                 onLogAudit={(action, details) => {
                   setState(current => {
                     const updatedState = { ...current };
-                    addAuditLog(updatedState, action, details, user);
+                    addAuditLog(updatedState, action, details, state.currentUser);
                     return updatedState;
                   });
                 }}
+                simulationRole={simulationRole}
+                onSelectSimulationRole={setSimulationRole}
               />
             )}
 
