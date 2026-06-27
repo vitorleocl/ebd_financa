@@ -22,6 +22,8 @@ import {
   loadStateFromFirestore,
   GoogleAuthProvider,
   signInWithPopup,
+  signInWithRedirect,
+  getRedirectResult,
   onAuthStateChanged,
   onSnapshot
 } from './lib/firebase';
@@ -88,6 +90,23 @@ export default function App() {
   useEffect(() => {
     saveState(state);
   }, [state]);
+
+  // Handle Google Redirect login results on mobile mount
+  useEffect(() => {
+    const checkRedirectResult = async () => {
+      try {
+        const result = await getRedirectResult(auth);
+        if (result) {
+          console.log("Sucesso ao recuperar resultado de login por redirecionamento:", result.user);
+        }
+      } catch (error: any) {
+        console.error("Erro ao recuperar resultado de login por redirecionamento:", error);
+        const friendlyMsg = getFriendlyFirebaseError(error.code || error.message);
+        setLoginError(`Erro no retorno do redirecionamento Google: ${friendlyMsg}`);
+      }
+    };
+    checkRedirectResult();
+  }, []);
 
   // Synchronize active authentication state changes and roles with real-time Firestore sync
   useEffect(() => {
@@ -299,16 +318,22 @@ export default function App() {
     }
   };
 
-  // Google Login click handler via Firebase Auth Popup
+  // Google Login click handler via Firebase Auth Popup / Redirect (smart mobile routing)
   const handleGoogleLoginClick = async () => {
     setLoginError(null);
     try {
       const provider = new GoogleAuthProvider();
-      await signInWithPopup(auth, provider);
-      // O listener onAuthStateChanged configurado no useEffect principal irá interceptar
-      // o login bem-sucedido, conectar-se em tempo real ao Firestore (onSnapshot),
-      // recuperar o estado mais atualizado, consultar a lista de usuários,
-      // definir o cargo (role) correto e ajustar o currentUser de forma segura e livre de condições de corrida.
+      
+      const isIframe = window.self !== window.top;
+      const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+
+      if (isMobile && !isIframe) {
+        console.log("Dispositivo móvel detectado fora de iframe. Iniciando login via signInWithRedirect...");
+        await signInWithRedirect(auth, provider);
+      } else {
+        console.log("Dispositivo desktop ou dentro de iframe detectado. Iniciando login via signInWithPopup...");
+        await signInWithPopup(auth, provider);
+      }
     } catch (error: any) {
       console.error("Erro Google Sign-In via Firebase:", error);
       const friendlyMsg = getFriendlyFirebaseError(error.code || error.message);

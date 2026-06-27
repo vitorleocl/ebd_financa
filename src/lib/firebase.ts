@@ -12,7 +12,9 @@ import {
   onAuthStateChanged,
   User as FirebaseUser,
   GoogleAuthProvider,
-  signInWithPopup
+  signInWithPopup,
+  signInWithRedirect,
+  getRedirectResult
 } from "firebase/auth";
 import { 
   getFirestore, 
@@ -55,6 +57,8 @@ export {
   onAuthStateChanged,
   GoogleAuthProvider,
   signInWithPopup,
+  signInWithRedirect,
+  getRedirectResult,
   onSnapshot,
   doc
 };
