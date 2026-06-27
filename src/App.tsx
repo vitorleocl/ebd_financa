@@ -1424,13 +1424,14 @@ export default function App() {
                 users={state.users}
                 currentUser={user}
                 onUpdateUsersList={(updatedUsers) => {
-                  const updatedState = { ...state, users: updatedUsers };
-                  setState(updatedState);
+                  setState(current => ({ ...current, users: updatedUsers }));
                 }}
                 onLogAudit={(action, details) => {
-                  const updatedState = { ...state };
-                  addAuditLog(updatedState, action, details, user);
-                  setState(updatedState);
+                  setState(current => {
+                    const updatedState = { ...current };
+                    addAuditLog(updatedState, action, details, user);
+                    return updatedState;
+                  });
                 }}
               />
             )}
