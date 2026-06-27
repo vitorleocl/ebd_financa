@@ -20,6 +20,7 @@ export interface Box {
   name: string;
   description: string;
   balance: number;
+  initialBalance?: number;
 }
 
 export type TransactionType = 'ENTRADA' | 'SAIDA';

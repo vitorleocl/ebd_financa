@@ -5,7 +5,7 @@
 
 import React, { useState } from 'react';
 import { Box, Transaction, Category, BoxId, User } from '../types';
-import { ArrowLeftRight, Landmark, Calendar, Search, ArrowUpRight, ArrowDownRight, FileText, CheckCircle, AlertCircle } from 'lucide-react';
+import { ArrowLeftRight, Landmark, Calendar, Search, ArrowUpRight, ArrowDownRight, FileText, CheckCircle, AlertCircle, Trash2 } from 'lucide-react';
 import SignaturePad from './SignaturePad';
 
 interface BoxesManagementProps {
@@ -14,6 +14,7 @@ interface BoxesManagementProps {
   categories: Category[];
   currentUser: User | null;
   onViewTransaction: (tx: Transaction) => void;
+  onDeleteTransaction?: (txId: string) => void;
   onTransfer: (data: {
     fromBox: BoxId;
     toBox: BoxId;
@@ -29,10 +30,12 @@ export default function BoxesManagement({
   categories,
   currentUser,
   onViewTransaction,
+  onDeleteTransaction,
   onTransfer
 }: BoxesManagementProps) {
   const [selectedBoxId, setSelectedBoxId] = useState<BoxId>('CAIXA_5_EBD');
   const [showTransferForm, setShowTransferForm] = useState(false);
+  const [confirmDeleteTxId, setConfirmDeleteTxId] = useState<string | null>(null);
 
   // Search/Filter states
   const [searchQuery, setSearchQuery] = useState('');
@@ -312,7 +315,7 @@ export default function BoxesManagement({
                     <th className="p-3">Categoria</th>
                     <th className="p-3">Descrição / Resp</th>
                     <th className="p-3 text-right">Valor</th>
-                    <th className="p-3 text-center no-print bg-slate-50 px-2 py-0.5 rounded-full">Visualizar</th>
+                    <th className="p-3 text-center no-print bg-slate-50 px-2 py-0.5 rounded-full">Ações</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
@@ -353,14 +356,52 @@ export default function BoxesManagement({
                               {isApprovedVal ? 'Conciliado' : 'Aprovando'}
                             </span>
                           </td>
-                          <td className="p-3 text-center no-print">
-                            <button
-                              onClick={() => onViewTransaction(t)}
-                              className="inline-flex items-center gap-1 py-1 px-1.5 border border-indigo-200 hover:border-indigo-500 rounded bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-[10px] font-bold font-mono transition-all"
-                            >
-                              <FileText className="w-3.5 h-3.5" />
-                              VER
-                            </button>
+                          <td className="p-3 text-center no-print whitespace-nowrap">
+                            <div className="inline-flex items-center gap-1.5">
+                              <button
+                                onClick={() => onViewTransaction(t)}
+                                className="inline-flex items-center gap-1 py-1 px-1.5 border border-indigo-200 hover:border-indigo-500 rounded bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-[10px] font-bold font-mono transition-all cursor-pointer"
+                              >
+                                <FileText className="w-3.5 h-3.5" />
+                                VER
+                              </button>
+                              
+                              {currentUser?.role !== 'VISITANTE' && (
+                                confirmDeleteTxId === t.id ? (
+                                  <div className="inline-flex items-center gap-1">
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        if (onDeleteTransaction) {
+                                          onDeleteTransaction(t.id);
+                                        }
+                                        setConfirmDeleteTxId(null);
+                                      }}
+                                      className="py-1 px-1.5 bg-red-600 hover:bg-red-700 text-white rounded text-[10px] font-bold font-mono transition-all cursor-pointer"
+                                    >
+                                      SIM
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => setConfirmDeleteTxId(null)}
+                                      className="py-1 px-1.5 bg-slate-200 hover:bg-slate-300 text-slate-700 border border-slate-300 rounded text-[10px] font-bold font-mono transition-all cursor-pointer"
+                                    >
+                                      NÃO
+                                    </button>
+                                  </div>
+                                ) : (
+                                  <button
+                                    type="button"
+                                    onClick={() => setConfirmDeleteTxId(t.id)}
+                                    className="inline-flex items-center gap-1 py-1 px-1.5 border border-red-200 hover:border-red-500 rounded bg-red-50 hover:bg-red-100 text-red-750 text-[10px] font-bold font-mono transition-all cursor-pointer"
+                                    title="Excluir ou cancelar este lançamento permanentemente"
+                                  >
+                                    <Trash2 className="w-3 h-3" />
+                                    EXCLUIR
+                                  </button>
+                                )
+                              )}
+                            </div>
                           </td>
                         </tr>
                       );

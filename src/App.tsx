@@ -9,7 +9,7 @@ import { User, BoxId, Transaction, WeeklyClosing as ClosingType, Person, UserRol
 import { 
   Lock, Landmark, ArrowLeftRight, PlusCircle, CalendarRange, 
   Users, BarChart3, History, LogOut, ShieldAlert, FileDown, FileUp, 
-  Menu, X, BookOpen, AlertCircle, ShieldCheck, Cloud
+  Menu, X, BookOpen, AlertCircle, ShieldCheck, Cloud, Trash2
 } from 'lucide-react';
 import { 
   auth, 
@@ -46,8 +46,8 @@ export default function App() {
     return initial;
   });
 
-  // Track if a state change came from a remote Firestore snapshot to prevent loop
-  const isRemoteUpdateRef = useRef(false);
+  // Bulletproof state deduplication and sync-loop prevention string
+  const lastSyncStringRef = useRef<string>('');
   
   // Login input fields
   const [usernameInput, setUsernameInput] = useState('');
@@ -81,6 +81,7 @@ export default function App() {
   // Modal overlays
   const [activeReceipt, setActiveReceipt] = useState<Transaction | null>(null);
   const [activeAta, setActiveAta] = useState<ClosingType | null>(null);
+  const [showResetConfirm, setShowResetConfirm] = useState(false);
 
   // Sync state changes instantly to localStorage
   useEffect(() => {
@@ -104,8 +105,23 @@ export default function App() {
             if (docSnap.exists()) {
               const savedState = docSnap.data();
               
-              // Mark that this update comes from the remote database to avoid trigger save loop
-              isRemoteUpdateRef.current = true;
+              // Normalize data to create a deterministic JSON string for comparison
+              const normalizedData = {
+                boxes: savedState.boxes || [],
+                categories: savedState.categories || [],
+                transactions: savedState.transactions || [],
+                people: savedState.people || [],
+                closings: savedState.closings || [],
+                auditLogs: savedState.auditLogs || [],
+                users: savedState.users || []
+              };
+              const dataStr = JSON.stringify(normalizedData);
+              
+              if (dataStr === lastSyncStringRef.current) {
+                return;
+              }
+              
+              lastSyncStringRef.current = dataStr;
 
               setState(current => {
                 const updatedState = { ...current };
@@ -190,8 +206,18 @@ export default function App() {
 
   // Sync state changes durably to Google Firestore if a Firebase User is logged in
   useEffect(() => {
-    if (isRemoteUpdateRef.current) {
-      isRemoteUpdateRef.current = false;
+    const normalizedCurrent = {
+      boxes: state.boxes || [],
+      categories: state.categories || [],
+      transactions: state.transactions || [],
+      people: state.people || [],
+      closings: state.closings || [],
+      auditLogs: state.auditLogs || [],
+      users: state.users || []
+    };
+    const currentStr = JSON.stringify(normalizedCurrent);
+
+    if (currentStr === lastSyncStringRef.current) {
       return;
     }
 
@@ -199,6 +225,7 @@ export default function App() {
       const fbUserId = state.currentUser.id.replace('fb-', '');
       setSyncingFirestore(true);
       const timer = setTimeout(() => {
+        lastSyncStringRef.current = currentStr;
         saveStateToFirestore(fbUserId, state)
           .then(() => {
             setLastSyncedTime(new Date().toLocaleTimeString());
@@ -663,6 +690,27 @@ export default function App() {
         updatedState,
         'Aprovação de Movimentação',
         `Aprovou e conciliou o voucher ${tx.transactionNum} no valor de R$ ${tx.amount.toFixed(2)}.`
+      );
+
+      setState(updatedState);
+    }
+  };
+
+  // Transaction deletion/cancellation handler
+  const handleDeleteTransaction = (txId: string) => {
+    const updatedState = { ...state };
+    const tx = updatedState.transactions.find(t => t.id === txId);
+    if (tx) {
+      updatedState.transactions = updatedState.transactions.filter(t => t.id !== txId);
+      
+      // Refresh final balances automatically
+      updatedState.boxes = recalculateBalances(updatedState);
+
+      // Audit Log
+      addAuditLog(
+        updatedState,
+        'Exclusão de Lançamento',
+        `Excluiu e cancelou o lançamento ${tx.transactionNum} no valor de R$ ${tx.amount.toFixed(2)} (${tx.type.toLowerCase()}).`
       );
 
       setState(updatedState);
@@ -1193,6 +1241,18 @@ export default function App() {
                       className="hidden"
                     />
                   </label>
+
+                  {user.role === 'MASTER' && (
+                    <button
+                      type="button"
+                      onClick={() => setShowResetConfirm(true)}
+                      className="p-1 px-2 bg-red-950/40 hover:bg-red-900/50 border border-red-900/50 hover:border-red-700 text-red-300 hover:text-red-200 duration-100 flex items-center gap-1 font-bold font-mono text-[9px] uppercase tracking-wide cursor-pointer rounded"
+                      title="Limpar todos os lançamentos, fechamentos e auditorias para iniciar o uso real"
+                    >
+                      <Trash2 className="w-3 h-3" />
+                      Zerar Dados
+                    </button>
+                  )}
                 </div>
               )}
 
@@ -1288,6 +1348,14 @@ export default function App() {
                     >
                       Download Backup
                     </button>
+                    {user.role === 'MASTER' && (
+                      <button
+                        onClick={() => { setShowResetConfirm(true); setMobileMenuOpen(false); }}
+                        className="flex-1 py-1 px-3 bg-red-550/15 border border-red-500/20 text-red-300 rounded text-center text-[10px]"
+                      >
+                        Zerar Dados
+                      </button>
+                    )}
                     <button
                       onClick={handleLogout}
                       className="flex-1 py-1 px-3 bg-red-500/10 border border-red-500/20 text-red-400 rounded text-center text-[10px]"
@@ -1373,6 +1441,7 @@ export default function App() {
                 categories={state.categories}
                 currentUser={user}
                 onViewTransaction={(tx) => setActiveReceipt(tx)}
+                onDeleteTransaction={handleDeleteTransaction}
                 onTransfer={handleTransferFunds}
               />
             )}
@@ -1458,6 +1527,61 @@ export default function App() {
           transactions={state.transactions}
           onClose={() => setActiveAta(null)}
         />
+      )}
+
+      {/* Visual Modal Layer 3: System Reset Confirmation */}
+      {showResetConfirm && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl max-w-md w-full p-6 border border-slate-100 shadow-2xl space-y-4 animate-scale-in text-left">
+            <div className="w-12 h-12 bg-red-50 text-red-600 rounded-full flex items-center justify-center border border-red-100">
+              <Trash2 className="w-5 h-5" />
+            </div>
+            <div className="space-y-1">
+              <h3 className="font-extrabold text-slate-850 text-base">Confirmar Limpeza Completa</h3>
+              <p className="text-xs text-slate-500 leading-relaxed">
+                Tem certeza de que deseja apagar todos os lançamentos, fechamentos e dados históricos de teste? Todos os caixas serão redefinidos para <strong>R$ 0,00</strong> para permitir o preenchimento de seus saldos reais.
+              </p>
+            </div>
+            <div className="flex gap-3 pt-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setState(current => {
+                    const updatedState = { ...current };
+                    updatedState.transactions = [];
+                    updatedState.closings = [];
+                    updatedState.people = [];
+                    updatedState.auditLogs = [];
+                    updatedState.boxes = current.boxes.map(b => ({
+                      ...b,
+                      balance: 0,
+                      initialBalance: 0
+                    }));
+                    
+                    addAuditLog(
+                      updatedState,
+                      'Zerar Sistema',
+                      'O administrador realizou a limpeza completa de dados para início do uso real.',
+                      current.currentUser
+                    );
+                    return updatedState;
+                  });
+                  setShowResetConfirm(false);
+                }}
+                className="flex-1 py-2.5 bg-red-650 hover:bg-red-700 text-white rounded-xl font-bold text-xs transition-all cursor-pointer text-center"
+              >
+                Sim, Apagar Tudo
+              </button>
+              <button
+                type="button"
+                onClick={() => setShowResetConfirm(false)}
+                className="flex-1 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-bold text-xs transition-all cursor-pointer text-center"
+              >
+                Cancelar
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* Institutional Legal Footer */}

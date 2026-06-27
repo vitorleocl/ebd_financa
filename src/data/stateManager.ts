@@ -118,10 +118,7 @@ export function recalculateBalances(state: AppState): Box[] {
     const boxTransactionsForThisBox = state.transactions.filter(t => t.boxId === box.id);
     
     // Base is starting balance which is constant or starting from zero.
-    // For our initial boxes, we pre-configured a balance. Let's make the box balance represent
-    // initial balance plus modern transactions:
-    // To keep it simple and robust, let's assume Caixa 5% starting balance was 1000.00 and Caixa Lições was 500.00.
-    const baseBalance = box.id === 'CAIXA_5_EBD' ? 1000.00 : 500.00;
+    const baseBalance = box.initialBalance || 0;
     
     const balance = boxTransactionsForThisBox.reduce((acc, t) => {
       // If it's approved, it affects the box balance
