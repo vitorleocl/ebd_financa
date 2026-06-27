@@ -112,12 +112,25 @@ export default function App() {
             ) {
               assignedRole = 'MASTER';
               userDisplayName = 'Vitor Leonardo';
-            } else {
-              const registeredUser = updatedState.users.find(u => u.username.toLowerCase().trim() === emailLower);
-              if (registeredUser) {
+            }
+
+            const registeredUserIndex = updatedState.users.findIndex(u => u.username.toLowerCase().trim() === emailLower);
+            if (registeredUserIndex >= 0) {
+              const registeredUser = updatedState.users[registeredUserIndex];
+              if (assignedRole !== 'MASTER') {
                 assignedRole = registeredUser.role;
-                userDisplayName = registeredUser.name;
               }
+              userDisplayName = registeredUser.name;
+            } else {
+              // Add them automatically to state.users so they show up in UsersManagement for administration
+              const newUserObj = {
+                id: `fb-${fbUser.uid}`,
+                name: userDisplayName,
+                username: emailLower,
+                role: assignedRole,
+                avatarColor: assignedRole === 'MASTER' ? 'bg-indigo-900' : 'bg-slate-500'
+              };
+              updatedState.users.push(newUserObj);
             }
 
             // Update context user session to align with the database
@@ -164,6 +177,7 @@ export default function App() {
     state.people, 
     state.categories, 
     state.auditLogs, 
+    state.users,
     state.currentUser?.id
   ]);
 

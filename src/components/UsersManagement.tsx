@@ -168,10 +168,18 @@ export default function UsersManagement({
           ) : (
             <>
               <UserPlus className="w-3.5 h-3.5" />
-              Prá-Cadastrar Usuário
+              Pré-Cadastrar Usuário
             </>
           )}
         </button>
+      </div>
+
+      <div className="bg-slate-50 border border-slate-150 rounded-2xl p-4 text-xs text-slate-600 space-y-1">
+        <span className="font-extrabold text-slate-700 block">💡 Dica de Integração Google / Firebase</span>
+        <p>
+          Qualquer colaborador que fizer o primeiro acesso via **Entrar com o Google** ou realizar cadastro com e-mail será **adicionado a esta lista automaticamente** com perfil inicial de <span className="font-bold text-slate-700">VISITANTE</span>. 
+          Como administrador, você não precisa pré-cadastrá-los; basta localizá-los na tabela abaixo após o primeiro login para atualizar seus cargos ou gerenciar seus acessos!
+        </p>
       </div>
 
       {/* Add User Form overlay/card */}
