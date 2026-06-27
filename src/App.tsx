@@ -9,7 +9,7 @@ import { User, BoxId, Transaction, WeeklyClosing as ClosingType, Person, UserRol
 import { 
   Lock, Landmark, ArrowLeftRight, PlusCircle, CalendarRange, 
   Users, BarChart3, History, LogOut, ShieldAlert, FileDown, FileUp, 
-  Menu, X, BookOpen, AlertCircle, ShieldCheck, Cloud, Trash2
+  Menu, X, BookOpen, AlertCircle, ShieldCheck, Cloud, Trash2, Loader2
 } from 'lucide-react';
 import { 
   auth, 
@@ -51,6 +51,12 @@ export default function App() {
 
   // Bulletproof state deduplication and sync-loop prevention string
   const lastSyncStringRef = useRef<string>('');
+
+  // Gate to prevent local stale state from overwriting Firestore during connection
+  const hasLoadedFromFirestoreRef = useRef<boolean>(false);
+
+  // Connection and loading states
+  const [isConnectingAuth, setIsConnectingAuth] = useState<boolean>(true);
   
   // Login input fields
   const [usernameInput, setUsernameInput] = useState('');
@@ -122,6 +128,10 @@ export default function App() {
         try {
           const docRef = doc(db, "ebd_states", "shared_church_ebd");
           unsubscribeSnapshot = onSnapshot(docRef, (docSnap) => {
+            // Unblock and enable Firestore syncing once the first snapshot arrives
+            hasLoadedFromFirestoreRef.current = true;
+            setIsConnectingAuth(false);
+
             if (docSnap.exists()) {
               const savedState = docSnap.data();
               
@@ -276,15 +286,18 @@ export default function App() {
             }
           }, (err) => {
             console.error("Erro no listener de Firestore onSnapshot:", err);
+            setIsConnectingAuth(false);
           });
         } catch (err) {
           console.error("Erro ao sincronizar login ativo com Firestore:", err);
+          setIsConnectingAuth(false);
         }
       } else {
         if (unsubscribeSnapshot) {
           unsubscribeSnapshot();
           unsubscribeSnapshot = null;
         }
+        setIsConnectingAuth(false);
       }
     });
 
@@ -298,6 +311,11 @@ export default function App() {
 
   // Sync state changes durably to Google Firestore if a Firebase User is logged in
   useEffect(() => {
+    // Prevent syncing back local changes until the first remote snapshot has loaded and been merged
+    if (!hasLoadedFromFirestoreRef.current) {
+      return;
+    }
+
     const normalizedCurrent = {
       boxes: state.boxes || [],
       categories: state.categories || [],
@@ -390,6 +408,9 @@ export default function App() {
       const isIframe = window.self !== window.top;
       const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
 
+      // Trigger connecting auth to show loading spinner during redirect/popup transition
+      setIsConnectingAuth(true);
+
       if (isIframe) {
         console.log("App carregado dentro de um Iframe. Forçando signInWithPopup...");
         await signInWithPopup(auth, provider);
@@ -411,12 +432,14 @@ export default function App() {
             console.log("Acionando fallback do Google via signInWithRedirect...");
             await signInWithRedirect(auth, provider);
           } else {
+            setIsConnectingAuth(false);
             throw popupError;
           }
         }
       }
     } catch (error: any) {
       console.error("Erro Google Sign-In via Firebase:", error);
+      setIsConnectingAuth(false);
       const friendlyMsg = getFriendlyFirebaseError(error.code || error.message);
       const rawDetails = error.message && error.message !== error.code ? ` (Mensagem técnica: ${error.message})` : '';
       setLoginError(`Erro de Login Google: ${friendlyMsg}${rawDetails}`);
@@ -844,6 +867,33 @@ export default function App() {
 
     setState(updatedState);
   };
+
+  // High-contrast premium loading screen for authentication check and Firestore sync
+  if (isConnectingAuth) {
+    return (
+      <div className="min-h-screen bg-slate-900 flex flex-col items-center justify-center py-12 px-4 sm:px-6 lg:px-8 relative overflow-hidden font-sans">
+        {/* Background ambient decorations */}
+        <div className="absolute top-0 right-0 w-96 h-96 bg-indigo-500/10 rounded-full blur-3xl -mr-32 -mt-32 pointer-events-none" />
+        <div className="absolute bottom-0 left-0 w-96 h-96 bg-indigo-500/5 rounded-full blur-3xl -ml-32 -mb-32 pointer-events-none" />
+
+        <div className="text-center z-10 flex flex-col items-center space-y-6">
+          <div className="animate-pulse flex flex-col items-center justify-center">
+            <LogoEBD className="w-48 h-36 drop-shadow-lg" />
+          </div>
+          
+          <div className="flex flex-col items-center space-y-3">
+            <Loader2 className="w-8 h-8 text-indigo-400 animate-spin" />
+            <p className="text-sm font-semibold text-slate-300">
+              Sincronizando dados com a nuvem...
+            </p>
+            <p className="text-[10px] font-mono text-slate-500 tracking-wider uppercase">
+              Por favor, aguarde um instante
+            </p>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   // Session check wrapper
   if (!state.currentUser) {
