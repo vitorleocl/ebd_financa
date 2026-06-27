@@ -5,7 +5,7 @@
 
 import React, { useState } from 'react';
 import { WeeklyClosing as ClosingType, Transaction, User } from '../types';
-import { Calendar, ShieldAlert, CheckCircle, FileText, Lock, PenTool, ClipboardCheck, Clock } from 'lucide-react';
+import { Calendar, ShieldAlert, CheckCircle, FileText, Lock, PenTool, ClipboardCheck, Clock, Trash2 } from 'lucide-react';
 import SignaturePad from './SignaturePad';
 
 interface WeeklyClosingProps {
@@ -25,6 +25,7 @@ interface WeeklyClosingProps {
     treasurerSignature: string;
   }) => void;
   onApproveClosing?: (closingId: string) => void;
+  onDeleteClosing?: (closingId: string) => void;
 }
 
 export default function WeeklyClosing({
@@ -33,7 +34,8 @@ export default function WeeklyClosing({
   currentUser,
   onViewAta,
   onAddClosing,
-  onApproveClosing
+  onApproveClosing,
+  onDeleteClosing
 }: WeeklyClosingProps) {
   const [showClosingForm, setShowClosingForm] = useState(false);
   const [comments, setComments] = useState('');
@@ -363,6 +365,21 @@ export default function WeeklyClosing({
                             id={`approve-closing-btn-${close.id}`}
                           >
                             Dar Visto
+                          </button>
+                        )}
+
+                        {onDeleteClosing && currentUser?.role !== 'VISITANTE' && (
+                          <button
+                            onClick={() => {
+                              if (window.confirm(`Tem certeza de que deseja excluir a Ata ${close.closingNum}?`)) {
+                                onDeleteClosing(close.id);
+                              }
+                            }}
+                            className="py-1 px-2.5 rounded bg-red-50 hover:bg-red-600 duration-150 border border-red-200 text-red-600 hover:text-white font-bold flex items-center gap-1 cursor-pointer"
+                            title="Excluir Ata de Fechamento"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                            Excluir
                           </button>
                         )}
                       </div>

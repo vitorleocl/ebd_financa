@@ -851,6 +851,26 @@ export default function App() {
     }
   };
 
+  // Delete closing handler
+  const handleDeleteClosing = (closingId: string) => {
+    const updatedState = { ...state };
+    const closing = updatedState.closings.find(c => c.id === closingId);
+    
+    if (closing) {
+      updatedState.closings = updatedState.closings.filter(c => c.id !== closingId);
+
+      // Audit Log
+      addAuditLog(
+        updatedState,
+        'Exclusão de Fechamento',
+        `Excluiu a ata de fechamento semanal ${closing.closingNum}.`,
+        updatedState.currentUser
+      );
+
+      setState(updatedState);
+    }
+  };
+
   // Student & Visitor registrant submittals (Secretary or Treasurer)
   const handleAddPerson = (data: {
     name: string;
@@ -1433,6 +1453,7 @@ export default function App() {
                 onViewAta={(closing) => setActiveAta(closing)}
                 onAddClosing={handleAddClosing}
                 onApproveClosing={handleApproveClosing}
+                onDeleteClosing={handleDeleteClosing}
               />
             )}
 
