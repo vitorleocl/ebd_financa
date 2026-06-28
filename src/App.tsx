@@ -127,7 +127,11 @@ export default function App() {
   const hasLoadedFromFirestoreRef = useRef<boolean>(false);
 
   // Connection and loading states
-  const [isConnectingAuth, setIsConnectingAuth] = useState<boolean>(true);
+  const [isConnectingAuth, setIsConnectingAuth] = useState<boolean>(() => {
+    // If there is no active session flag in localStorage, bypass the full-screen loading blocker on mount.
+    // This allows the login form to render instantly in 0ms, making the app incredibly fast!
+    return localStorage.getItem('ebd_has_session') === 'true';
+  });
   
   // Login input fields
   const [usernameInput, setUsernameInput] = useState('');
@@ -194,6 +198,7 @@ export default function App() {
 
     const unsubscribeAuth = onAuthStateChanged(auth, async (fbUser) => {
       if (fbUser) {
+        localStorage.setItem('ebd_has_session', 'true');
         if (unsubscribeSnapshot) {
           unsubscribeSnapshot();
           unsubscribeSnapshot = null;
@@ -327,17 +332,19 @@ export default function App() {
                   avatarColor: assignedRole === 'MASTER' ? 'bg-indigo-900' : assignedRole === 'TESOUREIRO' ? 'bg-blue-600' : assignedRole === 'SECRETARIA' ? 'bg-indigo-600' : assignedRole === 'DIRIGENTE' ? 'bg-emerald-600' : 'bg-slate-500'
                 };
 
-                // Normalize and serialize the newly merged state to set as the sync reference string
-                const normalizedCurrent = {
-                  boxes: updatedState.boxes || [],
-                  categories: updatedState.categories || [],
-                  transactions: updatedState.transactions || [],
-                  people: updatedState.people || [],
-                  closings: updatedState.closings || [],
-                  auditLogs: updatedState.auditLogs || [],
-                  users: updatedState.users || []
+                // Normalize and serialize the incoming remote database state to set as the sync reference string.
+                // This ensures that any local auto-additions or offline merges (like newly logged-in visitor users)
+                // differ from the remote state and are successfully written back to Firestore!
+                const normalizedRemote = {
+                  boxes: savedState.boxes || [],
+                  categories: savedState.categories || [],
+                  transactions: savedState.transactions || [],
+                  people: savedState.people || [],
+                  closings: savedState.closings || [],
+                  auditLogs: savedState.auditLogs || [],
+                  users: savedState.users || []
                 };
-                lastSyncStringRef.current = JSON.stringify(normalizedCurrent);
+                lastSyncStringRef.current = JSON.stringify(normalizedRemote);
 
                 return updatedState;
               });
@@ -431,6 +438,7 @@ export default function App() {
           setIsConnectingAuth(false);
         }
       } else {
+        localStorage.removeItem('ebd_has_session');
         if (unsubscribeSnapshot) {
           unsubscribeSnapshot();
           unsubscribeSnapshot = null;
@@ -695,6 +703,7 @@ export default function App() {
 
   // Logout handler
   const handleLogout = () => {
+    localStorage.removeItem('ebd_has_session');
     const updatedState = { ...state };
     if (updatedState.currentUser) {
       addAuditLog(updatedState, 'Logout de Usuario', `Usuario ${updatedState.currentUser.name} encerrou a sessao.`);
