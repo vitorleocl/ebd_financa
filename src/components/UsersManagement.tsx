@@ -104,7 +104,7 @@ export default function UsersManagement({
       return;
     }
 
-    if (users.some(u => u.username.toLowerCase() === emailClean)) {
+    if (users.some(u => u && u.username && u.username.toLowerCase() === emailClean)) {
       setFormError("Este e-mail já está configurado no sistema.");
       return;
     }
@@ -311,7 +311,7 @@ export default function UsersManagement({
               </tr>
 
               {users
-                .filter(u => u.username.toLowerCase() !== currentUser.username.toLowerCase())
+                .filter(u => u && u.username && currentUser && currentUser.username && u.username.toLowerCase() !== currentUser.username.toLowerCase())
                 .map(u => {
                   const isEditing = editingUserId === u.id;
 
@@ -331,7 +331,7 @@ export default function UsersManagement({
                         ) : (
                           <div className="flex items-center gap-3">
                             <span className={`w-8 h-8 rounded-full ${u.avatarColor || 'bg-indigo-500'} text-white font-black text-xs flex items-center justify-center`}>
-                              {u.name.substring(0, 2).toUpperCase()}
+                              {(u.name || 'Membro').substring(0, 2).toUpperCase()}
                             </span>
                             <div>
                               <div className="text-[11px] font-bold text-slate-700">{u.name}</div>
@@ -414,7 +414,7 @@ export default function UsersManagement({
                   );
                 })}
 
-              {users.filter(u => u.username.toLowerCase() !== currentUser.username.toLowerCase()).length === 0 && (
+              {users.filter(u => u && u.username && currentUser && currentUser.username && u.username.toLowerCase() !== currentUser.username.toLowerCase()).length === 0 && (
                 <tr>
                   <td colSpan={4} className="px-6 py-8 text-center text-slate-400 italic">
                     Nenhum outro usuário configurado. Clique em &ldquo;Pré-Cadastrar Usuário&rdquo; para convidar novos colaboradores da EBD.

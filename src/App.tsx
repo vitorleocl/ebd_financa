@@ -65,12 +65,20 @@ const mergeAndSortTransactions = (local: Transaction[], remote: Transaction[]): 
 
 const mergeUsers = (local: any[], remote: any[]): any[] => {
   const map = new Map<string, any>();
-  if (Array.isArray(remote)) remote.forEach(u => map.set(u.username.toLowerCase().trim(), u));
+  if (Array.isArray(remote)) {
+    remote.forEach(u => {
+      if (u && u.username) {
+        map.set(u.username.toLowerCase().trim(), u);
+      }
+    });
+  }
   if (Array.isArray(local)) {
     local.forEach(u => {
-      const key = u.username.toLowerCase().trim();
-      if (!map.has(key)) {
-        map.set(key, u);
+      if (u && u.username) {
+        const key = u.username.toLowerCase().trim();
+        if (!map.has(key)) {
+          map.set(key, u);
+        }
       }
     });
   }
@@ -293,7 +301,7 @@ export default function App() {
             return current;
           }
           const updatedState = { ...current };
-          const registeredUser = updatedState.users.find(u => u.username.toLowerCase().trim() === emailLower);
+          const registeredUser = updatedState.users.find(u => u && u.username && u.username.toLowerCase().trim() === emailLower);
           if (registeredUser) {
             if (assignedRole !== 'MASTER') {
               assignedRole = registeredUser.role;
@@ -401,7 +409,7 @@ export default function App() {
                   userDisplayName = 'Vitor Leonardo';
                 }
 
-                const registeredUserIndex = updatedState.users.findIndex(u => u.username.toLowerCase().trim() === emailLower);
+                const registeredUserIndex = updatedState.users.findIndex(u => u && u.username && u.username.toLowerCase().trim() === emailLower);
                 if (registeredUserIndex >= 0) {
                   const registeredUser = { ...updatedState.users[registeredUserIndex] };
                   if (assignedRole !== 'MASTER') {
@@ -489,7 +497,7 @@ export default function App() {
                   userDisplayName = 'Vitor Leonardo';
                 }
 
-                const registeredUserIndex = updatedState.users.findIndex(u => u.username.toLowerCase().trim() === emailLower);
+                const registeredUserIndex = updatedState.users.findIndex(u => u && u.username && u.username.toLowerCase().trim() === emailLower);
                 if (registeredUserIndex >= 0) {
                   const registeredUser = updatedState.users[registeredUserIndex];
                   if (assignedRole !== 'MASTER') {
@@ -592,7 +600,7 @@ export default function App() {
       return;
     }
 
-    if (state.currentUser && state.currentUser.id.startsWith('fb-')) {
+    if (state.currentUser && state.currentUser.id.startsWith('fb-') && state.currentUser.role !== 'VISITANTE') {
       const fbUserId = state.currentUser.id.replace('fb-', '');
       setSyncingFirestore(true);
       const timer = setTimeout(() => {
