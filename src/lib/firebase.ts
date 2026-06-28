@@ -79,9 +79,44 @@ export async function saveStateToFirestore(userId: string, stateData: any) {
   const savePromise = (async () => {
     try {
       const userDocRef = doc(db, "ebd_states", "shared_church_ebd");
+      
+      // Fetch latest remote users to prevent overwriting concurrent registrations!
+      let mergedUsers = stateData.users || [];
+      try {
+        const docSnap = await getDoc(userDocRef);
+        if (docSnap.exists()) {
+          const remoteData = docSnap.data();
+          const remoteUsers = remoteData.users || [];
+          
+          // Merge local and remote users safely
+          const map = new Map<string, any>();
+          remoteUsers.forEach((u: any) => {
+            if (u && u.username) map.set(u.username.toLowerCase().trim(), u);
+          });
+          mergedUsers.forEach((u: any) => {
+            if (u && u.username) {
+              const key = u.username.toLowerCase().trim();
+              if (!map.has(key)) {
+                map.set(key, u);
+              } else {
+                // If local has newer details (e.g. edited role), prioritize it
+                const remoteUser = map.get(key);
+                if (u.role !== remoteUser.role || u.name !== remoteUser.name) {
+                  map.set(key, u);
+                }
+              }
+            }
+          });
+          mergedUsers = Array.from(map.values());
+        }
+      } catch (err) {
+        console.warn("Could not fetch remote users for merging before save:", err);
+      }
+
       // Ensure currentUser is null so credentials/local sessions are kept local
       const stateToSave = {
         ...stateData,
+        users: mergedUsers,
         currentUser: null,
         updatedAt: new Date().toISOString()
       };

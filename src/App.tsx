@@ -156,7 +156,7 @@ const registerUserProfileInFirestore = async (fbUser: any): Promise<void> => {
     if (docSnap.exists()) {
       const savedState = docSnap.data();
       const remoteUsers = savedState.users || [];
-      const isAlreadyRegistered = remoteUsers.some((u: any) => u.username?.toLowerCase().trim() === emailLower);
+      const isAlreadyRegistered = remoteUsers.some((u: any) => u && u.username && u.username.toLowerCase().trim() === emailLower);
 
       if (!isAlreadyRegistered) {
         console.log(`[Firebase Register] Registrando usuário ${emailLower} atomicamente via updateDoc...`);
@@ -334,7 +334,7 @@ export default function App() {
               // Atomic registration guard to guarantee new logins are recorded in Firestore immediately
               const emailLowerForReg = fbUser.email?.toLowerCase().trim() || '';
               const remoteUsersForReg = savedState.users || [];
-              const isAlreadyRegisteredInFirestore = remoteUsersForReg.some((u: any) => u.username?.toLowerCase().trim() === emailLowerForReg);
+              const isAlreadyRegisteredInFirestore = remoteUsersForReg.some((u: any) => u && u.username && u.username.toLowerCase().trim() === emailLowerForReg);
 
               if (!isAlreadyRegisteredInFirestore && emailLowerForReg) {
                 let assignedRoleForReg: UserRole = 'VISITANTE';
