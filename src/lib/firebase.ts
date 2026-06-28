@@ -18,10 +18,13 @@ import {
   updateProfile
 } from "firebase/auth";
 import { 
-  getFirestore, 
+  getFirestore,
+  initializeFirestore, 
   doc, 
   setDoc, 
   getDoc,
+  getDocFromServer,
+  enableNetwork,
   collection,
   addDoc,
   getDocs,
@@ -51,7 +54,12 @@ const customDatabaseId = (import.meta as any).env.VITE_FIREBASE_FIRESTORE_DATABA
 const app = getApps().length === 0 ? initializeApp(dynamicFirebaseConfig) : getApp();
 
 export const auth = getAuth(app);
-export const db = customDatabaseId ? getFirestore(app, customDatabaseId) : getFirestore(app);
+
+// Use initializeFirestore with experimentalAutoDetectLongPolling: true to automatically switch to HTTP long-polling if WebSockets are blocked or fail.
+// This is critical for mobile carriers and firewall-restricted networks, preventing "Failed to get document because the client is offline" errors.
+export const db = initializeFirestore(app, {
+  experimentalAutoDetectLongPolling: true
+}, customDatabaseId || undefined);
 
 export { 
   signInWithEmailAndPassword, 
@@ -65,6 +73,8 @@ export {
   onSnapshot,
   doc,
   getDoc,
+  getDocFromServer,
+  enableNetwork,
   setDoc,
   updateDoc,
   arrayUnion,

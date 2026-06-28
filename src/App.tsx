@@ -16,6 +16,8 @@ import {
   db,
   doc,
   getDoc,
+  getDocFromServer,
+  enableNetwork,
   setDoc,
   signInWithEmailAndPassword, 
   createUserWithEmailAndPassword, 
@@ -669,10 +671,32 @@ export default function App() {
   // Manual synchronization from Firestore to force refresh current local state on-demand
   const handleForceSync = async () => {
     try {
+      // Forcefully wake up and re-establish the Firestore connection.
+      // This is extremely helpful on mobile carriers when network drops or sleeps.
+      try {
+        console.log("Forçando reconexão da rede do Firestore via enableNetwork...");
+        await enableNetwork(db);
+      } catch (netErr) {
+        console.warn("Aviso ao restabelecer rede do Firestore:", netErr);
+      }
+
       const docRef = doc(db, "ebd_states", "shared_church_ebd");
-      const docSnap = await getDoc(docRef);
+      
+      // Try fetching directly from the server to bypass stale offline local cache
+      let docSnap;
+      try {
+        console.log("Buscando documento atualizado diretamente do servidor Firestore...");
+        docSnap = await getDocFromServer(docRef);
+      } catch (srvErr) {
+        console.warn("Falha ao buscar do servidor diretamente, tentando getDoc padrão (cache/híbrido)...", srvErr);
+        docSnap = await getDoc(docRef);
+      }
+
       if (docSnap.exists()) {
         const savedState = docSnap.data();
+        
+        // Mark as loaded from Firestore successfully since we got a valid response
+        hasLoadedFromFirestoreRef.current = true;
         
         setState(current => {
           const updatedState = { ...current };
