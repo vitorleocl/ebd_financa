@@ -65,24 +65,44 @@ const mergeAndSortTransactions = (local: Transaction[], remote: Transaction[]): 
   });
 };
 
-const mergeUsers = (local: any[], remote: any[]): any[] => {
+const mergeUsers = (local: any[], remote: any[], isMaster: boolean = false): any[] => {
   const map = new Map<string, any>();
-  if (Array.isArray(remote)) {
-    remote.forEach(u => {
-      if (u && u.username) {
-        map.set(u.username.toLowerCase().trim(), u);
-      }
-    });
-  }
-  if (Array.isArray(local)) {
-    local.forEach(u => {
-      if (u && u.username) {
-        const key = u.username.toLowerCase().trim();
-        if (!map.has(key)) {
-          map.set(key, u);
+  if (isMaster) {
+    if (Array.isArray(local)) {
+      local.forEach(u => {
+        if (u && u.username) {
+          map.set(u.username.toLowerCase().trim(), u);
         }
-      }
-    });
+      });
+    }
+    if (Array.isArray(remote)) {
+      remote.forEach(u => {
+        if (u && u.username) {
+          const key = u.username.toLowerCase().trim();
+          if (!map.has(key)) {
+            map.set(key, u);
+          }
+        }
+      });
+    }
+  } else {
+    if (Array.isArray(remote)) {
+      remote.forEach(u => {
+        if (u && u.username) {
+          map.set(u.username.toLowerCase().trim(), u);
+        }
+      });
+    }
+    if (Array.isArray(local)) {
+      local.forEach(u => {
+        if (u && u.username) {
+          const key = u.username.toLowerCase().trim();
+          if (!map.has(key)) {
+            map.set(key, u);
+          }
+        }
+      });
+    }
   }
   return Array.from(map.values());
 };
@@ -392,12 +412,19 @@ export default function App() {
                 if (savedState.auditLogs && Array.isArray(savedState.auditLogs)) {
                   updatedState.auditLogs = mergeAuditLogs(current.auditLogs || [], savedState.auditLogs);
                 }
+                const emailLower = fbUser.email?.toLowerCase().trim() || '';
                 if (savedState.users && Array.isArray(savedState.users)) {
-                  updatedState.users = mergeUsers(current.users || [], savedState.users);
+                  const isMasterUser = (
+                    emailLower === 'vitorleonardoc@gmail.com' || 
+                    emailLower === 'vitorleonardocl@gmail.com' || 
+                    emailLower === 'vitorleonardocl@gmail.com.br' ||
+                    emailLower === 'vlcl@poli.br' ||
+                    current.currentUser?.role === 'MASTER'
+                  );
+                  updatedState.users = mergeUsers(current.users || [], savedState.users, isMasterUser);
                 }
 
                 // Check if currently authenticated user email's role has changed in the user list
-                const emailLower = fbUser.email?.toLowerCase().trim() || '';
                 let assignedRole: UserRole = 'VISITANTE';
                 let userDisplayName = fbUser.displayName || fbUser.email?.split('@')[0] || 'Membro';
 
@@ -721,7 +748,8 @@ export default function App() {
             updatedState.auditLogs = mergeAuditLogs(current.auditLogs || [], savedState.auditLogs);
           }
           if (savedState.users && Array.isArray(savedState.users)) {
-            updatedState.users = mergeUsers(current.users || [], savedState.users);
+            const isMasterUser = current.currentUser?.role === 'MASTER';
+            updatedState.users = mergeUsers(current.users || [], savedState.users, isMasterUser);
           }
 
           // Force check authenticated user
