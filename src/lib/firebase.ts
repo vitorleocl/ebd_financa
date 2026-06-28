@@ -64,6 +64,8 @@ export {
   getRedirectResult,
   onSnapshot,
   doc,
+  getDoc,
+  setDoc,
   updateDoc,
   arrayUnion,
   updateProfile

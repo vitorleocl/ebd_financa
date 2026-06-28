@@ -15,6 +15,8 @@ import {
   auth, 
   db,
   doc,
+  getDoc,
+  setDoc,
   signInWithEmailAndPassword, 
   createUserWithEmailAndPassword, 
   signOut as firebaseSignOut,
@@ -114,6 +116,66 @@ const mergeAuditLogs = (local: AuditLog[], remote: AuditLog[]): AuditLog[] => {
   return Array.from(map.values()).sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
 };
 
+const registerUserProfileInFirestore = async (fbUser: any): Promise<void> => {
+  const emailLower = fbUser.email?.toLowerCase().trim() || '';
+  if (!emailLower) return;
+
+  try {
+    const docRef = doc(db, "ebd_states", "shared_church_ebd");
+    const docSnap = await getDoc(docRef);
+    
+    let assignedRole: UserRole = 'VISITANTE';
+    let displayName = fbUser.displayName || fbUser.email?.split('@')[0] || 'Membro';
+
+    if (
+      emailLower === 'vitorleonardoc@gmail.com' || 
+      emailLower === 'vitorleonardocl@gmail.com' || 
+      emailLower === 'vitorleonardocl@gmail.com.br' ||
+      emailLower === 'vlcl@poli.br'
+    ) {
+      assignedRole = 'MASTER';
+      displayName = 'Vitor Leonardo';
+    }
+
+    const newUserProfile = {
+      id: `fb-${fbUser.uid}`,
+      name: displayName,
+      username: emailLower,
+      role: assignedRole,
+      avatarColor: assignedRole === 'MASTER' ? 'bg-indigo-900' : 'bg-slate-500'
+    };
+
+    if (docSnap.exists()) {
+      const savedState = docSnap.data();
+      const remoteUsers = savedState.users || [];
+      const isAlreadyRegistered = remoteUsers.some((u: any) => u.username?.toLowerCase().trim() === emailLower);
+
+      if (!isAlreadyRegistered) {
+        console.log(`[Firebase Register] Registrando usuário ${emailLower} atomicamente via updateDoc...`);
+        await updateDoc(docRef, {
+          users: arrayUnion(newUserProfile)
+        });
+        console.log(`[Firebase Register] Usuário ${emailLower} registrado com sucesso em Firestore.`);
+      } else {
+        console.log(`[Firebase Register] Usuário ${emailLower} já está registrado.`);
+      }
+    } else {
+      console.log(`[Firebase Register] Documento não existe. Inicializando com o primeiro usuário: ${emailLower}...`);
+      const defaultState = getInitialState();
+      defaultState.users = [newUserProfile];
+      const stateToSave = {
+        ...defaultState,
+        currentUser: null,
+        updatedAt: new Date().toISOString()
+      };
+      await setDoc(docRef, stateToSave);
+      console.log(`[Firebase Register] Documento inicializado com o usuário ${emailLower}.`);
+    }
+  } catch (err) {
+    console.error(`[Firebase Register] Erro no registro de perfil para ${emailLower}:`, err);
+  }
+};
+
 export default function App() {
   const [state, setState] = useState<AppState>(() => {
     const initial = getInitialState();
@@ -202,6 +264,10 @@ export default function App() {
     const unsubscribeAuth = onAuthStateChanged(auth, async (fbUser) => {
       if (fbUser) {
         localStorage.setItem('ebd_has_session', 'true');
+        
+        // Robust background registration of the logged-in user profile
+        registerUserProfileInFirestore(fbUser);
+
         if (unsubscribeSnapshot) {
           unsubscribeSnapshot();
           unsubscribeSnapshot = null;
@@ -337,11 +403,17 @@ export default function App() {
 
                 const registeredUserIndex = updatedState.users.findIndex(u => u.username.toLowerCase().trim() === emailLower);
                 if (registeredUserIndex >= 0) {
-                  const registeredUser = updatedState.users[registeredUserIndex];
+                  const registeredUser = { ...updatedState.users[registeredUserIndex] };
                   if (assignedRole !== 'MASTER') {
                     assignedRole = registeredUser.role;
                   }
                   userDisplayName = registeredUser.name;
+
+                  // Update their ID in the synced users list to reflect their real Firebase UID
+                  if (registeredUser.id.startsWith('fb-invite-')) {
+                    registeredUser.id = `fb-${fbUser.uid}`;
+                  }
+                  updatedState.users[registeredUserIndex] = registeredUser;
                 } else {
                   // Add them automatically to state.users so they show up in UsersManagement for administration
                   const newUserObj = {

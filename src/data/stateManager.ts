@@ -20,7 +20,7 @@ const getRandomIp = () => MOCK_IPS[Math.floor(Math.random() * MOCK_IPS.length)];
 
 export interface AppState {
   currentUser: User | null;
-  users: (User & { passwordHash: string })[];
+  users: (User & { passwordHash?: string })[];
   boxes: Box[];
   categories: Category[];
   transactions: Transaction[];
