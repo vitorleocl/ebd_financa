@@ -14,7 +14,8 @@ import {
   GoogleAuthProvider,
   signInWithPopup,
   signInWithRedirect,
-  getRedirectResult
+  getRedirectResult,
+  updateProfile
 } from "firebase/auth";
 import { 
   getFirestore, 
@@ -26,7 +27,9 @@ import {
   getDocs,
   query,
   orderBy,
-  onSnapshot
+  onSnapshot,
+  updateDoc,
+  arrayUnion
 } from "firebase/firestore";
 
 import firebaseConfig from "../../firebase-applet-config.json";
@@ -60,7 +63,10 @@ export {
   signInWithRedirect,
   getRedirectResult,
   onSnapshot,
-  doc
+  doc,
+  updateDoc,
+  arrayUnion,
+  updateProfile
 };
 export type { FirebaseUser };
 

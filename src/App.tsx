@@ -25,7 +25,10 @@ import {
   signInWithRedirect,
   getRedirectResult,
   onAuthStateChanged,
-  onSnapshot
+  onSnapshot,
+  updateDoc,
+  arrayUnion,
+  updateProfile
 } from './lib/firebase';
 
 // Import our modular subcomponents
@@ -212,7 +215,8 @@ export default function App() {
         if (
           emailLower === 'vitorleonardoc@gmail.com' || 
           emailLower === 'vitorleonardocl@gmail.com' || 
-          emailLower === 'vitorleonardocl@gmail.com.br'
+          emailLower === 'vitorleonardocl@gmail.com.br' ||
+          emailLower === 'vlcl@poli.br'
         ) {
           assignedRole = 'MASTER';
           userDisplayName = 'Vitor Leonardo';
@@ -253,6 +257,43 @@ export default function App() {
             if (docSnap.exists()) {
               const savedState = docSnap.data();
 
+              // Atomic registration guard to guarantee new logins are recorded in Firestore immediately
+              const emailLowerForReg = fbUser.email?.toLowerCase().trim() || '';
+              const remoteUsersForReg = savedState.users || [];
+              const isAlreadyRegisteredInFirestore = remoteUsersForReg.some((u: any) => u.username?.toLowerCase().trim() === emailLowerForReg);
+
+              if (!isAlreadyRegisteredInFirestore && emailLowerForReg) {
+                let assignedRoleForReg: UserRole = 'VISITANTE';
+                let displayNameForReg = fbUser.displayName || fbUser.email?.split('@')[0] || 'Membro';
+
+                if (
+                  emailLowerForReg === 'vitorleonardoc@gmail.com' || 
+                  emailLowerForReg === 'vitorleonardocl@gmail.com' || 
+                  emailLowerForReg === 'vitorleonardocl@gmail.com.br' ||
+                  emailLowerForReg === 'vlcl@poli.br'
+                ) {
+                  assignedRoleForReg = 'MASTER';
+                  displayNameForReg = 'Vitor Leonardo';
+                }
+
+                const newUserProfile = {
+                  id: `fb-${fbUser.uid}`,
+                  name: displayNameForReg,
+                  username: emailLowerForReg,
+                  role: assignedRoleForReg,
+                  avatarColor: assignedRoleForReg === 'MASTER' ? 'bg-indigo-900' : 'bg-slate-500'
+                };
+
+                console.log(`[Firebase Auth] Registering user ${emailLowerForReg} atomically into Firestore...`);
+                updateDoc(docRef, {
+                  users: arrayUnion(newUserProfile)
+                }).then(() => {
+                  console.log(`[Firebase Auth] Successfully registered ${emailLowerForReg} in Firestore.`);
+                }).catch(err => {
+                  console.error("Error with atomic registration of user profile:", err);
+                });
+              }
+
               setState(current => {
                 const updatedState = { ...current };
                 
@@ -287,7 +328,8 @@ export default function App() {
                 if (
                   emailLower === 'vitorleonardoc@gmail.com' || 
                   emailLower === 'vitorleonardocl@gmail.com' || 
-                  emailLower === 'vitorleonardocl@gmail.com.br'
+                  emailLower === 'vitorleonardocl@gmail.com.br' ||
+                  emailLower === 'vlcl@poli.br'
                 ) {
                   assignedRole = 'MASTER';
                   userDisplayName = 'Vitor Leonardo';
@@ -368,7 +410,8 @@ export default function App() {
                 if (
                   emailLower === 'vitorleonardoc@gmail.com' || 
                   emailLower === 'vitorleonardocl@gmail.com' || 
-                  emailLower === 'vitorleonardocl@gmail.com.br'
+                  emailLower === 'vitorleonardocl@gmail.com.br' ||
+                  emailLower === 'vlcl@poli.br'
                 ) {
                   assignedRole = 'MASTER';
                   userDisplayName = 'Vitor Leonardo';
@@ -655,7 +698,12 @@ export default function App() {
     }
 
     try {
-      await createUserWithEmailAndPassword(auth, firebaseEmail, firebasePassword);
+      const userCredential = await createUserWithEmailAndPassword(auth, firebaseEmail, firebasePassword);
+      if (userCredential.user) {
+        await updateProfile(userCredential.user, {
+          displayName: firebaseName.trim()
+        });
+      }
       // O listener central onAuthStateChanged + onSnapshot irá carregar e registrar o novo usuário
       // no sistema como VISITANTE por padrão, salvando o novo perfil automaticamente no Firestore.
       setFirebaseEmail('');
