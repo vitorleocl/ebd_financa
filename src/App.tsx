@@ -666,6 +666,97 @@ export default function App() {
     }
   };
 
+  // Manual synchronization from Firestore to force refresh current local state on-demand
+  const handleForceSync = async () => {
+    try {
+      const docRef = doc(db, "ebd_states", "shared_church_ebd");
+      const docSnap = await getDoc(docRef);
+      if (docSnap.exists()) {
+        const savedState = docSnap.data();
+        
+        setState(current => {
+          const updatedState = { ...current };
+          
+          // Merge all entities safely
+          if (savedState.boxes && Array.isArray(savedState.boxes)) {
+            updatedState.boxes = mergeArraysById(current.boxes || [], savedState.boxes);
+          }
+          if (savedState.categories && Array.isArray(savedState.categories)) {
+            updatedState.categories = mergeArraysById(current.categories || [], savedState.categories);
+          }
+          if (savedState.transactions && Array.isArray(savedState.transactions)) {
+            updatedState.transactions = mergeAndSortTransactions(current.transactions || [], savedState.transactions);
+          }
+          if (savedState.people && Array.isArray(savedState.people)) {
+            updatedState.people = mergeArraysById(current.people || [], savedState.people);
+          }
+          if (savedState.closings && Array.isArray(savedState.closings)) {
+            updatedState.closings = mergeClosings(current.closings || [], savedState.closings);
+          }
+          if (savedState.auditLogs && Array.isArray(savedState.auditLogs)) {
+            updatedState.auditLogs = mergeAuditLogs(current.auditLogs || [], savedState.auditLogs);
+          }
+          if (savedState.users && Array.isArray(savedState.users)) {
+            updatedState.users = mergeUsers(current.users || [], savedState.users);
+          }
+
+          // Force check authenticated user
+          if (current.currentUser) {
+            const emailLower = current.currentUser.username.toLowerCase().trim();
+            let assignedRole: UserRole = current.currentUser.role;
+            let userDisplayName = current.currentUser.name;
+
+            if (
+              emailLower === 'vitorleonardoc@gmail.com' || 
+              emailLower === 'vitorleonardocl@gmail.com' || 
+              emailLower === 'vitorleonardocl@gmail.com.br' ||
+              emailLower === 'vlcl@poli.br'
+            ) {
+              assignedRole = 'MASTER';
+              userDisplayName = 'Vitor Leonardo';
+            }
+
+            const registeredUserIndex = updatedState.users.findIndex(u => u && u.username && u.username.toLowerCase().trim() === emailLower);
+            if (registeredUserIndex >= 0) {
+              const registeredUser = { ...updatedState.users[registeredUserIndex] };
+              if (assignedRole !== 'MASTER') {
+                assignedRole = registeredUser.role;
+              }
+              userDisplayName = registeredUser.name;
+              updatedState.users[registeredUserIndex] = registeredUser;
+            }
+
+            updatedState.currentUser = {
+              ...current.currentUser,
+              name: userDisplayName,
+              role: assignedRole,
+              avatarColor: assignedRole === 'MASTER' ? 'bg-indigo-900' : assignedRole === 'TESOUREIRO' ? 'bg-blue-600' : assignedRole === 'SECRETARIA' ? 'bg-indigo-600' : assignedRole === 'DIRIGENTE' ? 'bg-emerald-600' : 'bg-slate-500'
+            };
+          }
+
+          // Update synchronization references to prevent immediate bounce-back loop
+          const normalizedRemote = {
+            boxes: savedState.boxes || [],
+            categories: savedState.categories || [],
+            transactions: savedState.transactions || [],
+            people: savedState.people || [],
+            closings: savedState.closings || [],
+            auditLogs: savedState.auditLogs || [],
+            users: savedState.users || []
+          };
+          lastSyncStringRef.current = JSON.stringify(normalizedRemote);
+
+          return updatedState;
+        });
+      } else {
+        throw new Error("O documento da igreja não existe no Firestore.");
+      }
+    } catch (err) {
+      console.error("Erro ao forçar sincronização manual do Firestore:", err);
+      throw err;
+    }
+  };
+
   // Google Login click handler via Firebase Auth Popup with Redirect fallback
   const handleGoogleLoginClick = async () => {
     setLoginError(null);
@@ -1774,6 +1865,7 @@ export default function App() {
                 }}
                 simulationRole={simulationRole}
                 onSelectSimulationRole={setSimulationRole}
+                onForceSync={handleForceSync}
               />
             )}
 

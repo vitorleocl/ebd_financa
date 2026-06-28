@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { User, UserRole } from '../types';
-import { UserPlus, Trash2, Edit3, Shield, UserCheck, Check, X, ShieldAlert } from 'lucide-react';
+import { UserPlus, Trash2, Edit3, Shield, UserCheck, Check, X, ShieldAlert, RefreshCw, Loader2 } from 'lucide-react';
 
 interface UsersManagementProps {
   users: (User & { passwordHash?: string })[];
@@ -9,6 +9,7 @@ interface UsersManagementProps {
   onLogAudit: (action: string, details: string) => void;
   simulationRole: UserRole | null;
   onSelectSimulationRole: (role: UserRole | null) => void;
+  onForceSync?: () => Promise<void>;
 }
 
 export default function UsersManagement({ 
@@ -17,11 +18,39 @@ export default function UsersManagement({
   onUpdateUsersList, 
   onLogAudit,
   simulationRole,
-  onSelectSimulationRole
+  onSelectSimulationRole,
+  onForceSync
 }: UsersManagementProps) {
   const [editingUserId, setEditingUserId] = useState<string | null>(null);
   const [editName, setEditName] = useState('');
   const [editRole, setEditRole] = useState<UserRole>('SECRETARIA');
+  
+  // Local syncing states
+  const [syncing, setSyncing] = useState(false);
+  const [syncError, setSyncError] = useState<string | null>(null);
+  const [syncSuccess, setSyncSuccess] = useState<string | null>(null);
+
+  const handleForceSyncClick = async () => {
+    setSyncing(true);
+    setSyncError(null);
+    setSyncSuccess(null);
+    try {
+      if (onForceSync) {
+        await onForceSync();
+        setSyncSuccess("Sincronização realizada com sucesso! Os usuários mais recentes foram carregados.");
+        onLogAudit(
+          'Forçar Sincronização',
+          `Sincronizou manualmente os usuários e estados a partir do Google Firestore.`
+        );
+        setTimeout(() => setSyncSuccess(null), 5000);
+      }
+    } catch (err: any) {
+      console.error(err);
+      setSyncError("Erro ao sincronizar dados do Firestore: " + (err.message || err));
+    } finally {
+      setSyncing(false);
+    }
+  };
   
   // Adding user form state
   const [showAddForm, setShowAddForm] = useState(false);
@@ -159,24 +188,63 @@ export default function UsersManagement({
           </p>
         </div>
 
-        <button
-          type="button"
-          onClick={() => setShowAddForm(!showAddForm)}
-          className="bg-indigo-600 text-white rounded-xl py-2.5 px-4 font-bold text-xs shadow-md shadow-indigo-100 hover:bg-indigo-700 transition-colors flex items-center justify-center gap-2 tracking-wide uppercase cursor-pointer"
-        >
-          {showAddForm ? (
-            <>
-              <X className="w-3.5 h-3.5" />
-              Cancelar
-            </>
-          ) : (
-            <>
-              <UserPlus className="w-3.5 h-3.5" />
-              Pré-Cadastrar Usuário
-            </>
-          )}
-        </button>
+        <div className="flex flex-wrap gap-2.5">
+          <button
+            type="button"
+            disabled={syncing}
+            onClick={handleForceSyncClick}
+            className={`rounded-xl py-2.5 px-4 font-bold text-xs shadow-md transition-all flex items-center justify-center gap-2 tracking-wide uppercase cursor-pointer ${
+              syncing 
+                ? 'bg-slate-100 text-slate-400 border border-slate-200 cursor-not-allowed shadow-none' 
+                : 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-emerald-100'
+            }`}
+          >
+            {syncing ? (
+              <>
+                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                Sincronizando...
+              </>
+            ) : (
+              <>
+                <RefreshCw className="w-3.5 h-3.5" />
+                Forçar Sincronização
+              </>
+            )}
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setShowAddForm(!showAddForm)}
+            className="bg-indigo-600 text-white rounded-xl py-2.5 px-4 font-bold text-xs shadow-md shadow-indigo-100 hover:bg-indigo-700 transition-colors flex items-center justify-center gap-2 tracking-wide uppercase cursor-pointer"
+          >
+            {showAddForm ? (
+              <>
+                <X className="w-3.5 h-3.5" />
+                Cancelar
+              </>
+            ) : (
+              <>
+                <UserPlus className="w-3.5 h-3.5" />
+                Pré-Cadastrar Usuário
+              </>
+            )}
+          </button>
+        </div>
       </div>
+
+      {syncSuccess && (
+        <div className="bg-emerald-50 text-emerald-800 text-xs font-bold p-3.5 rounded-2xl border border-emerald-100 flex items-center gap-2 animate-fade-in" id="sync-success-banner">
+          <Check className="w-4 h-4 text-emerald-600 shrink-0" />
+          <span>{syncSuccess}</span>
+        </div>
+      )}
+
+      {syncError && (
+        <div className="bg-red-50 text-red-800 text-xs font-bold p-3.5 rounded-2xl border border-red-100 flex items-center gap-2 animate-fade-in" id="sync-error-banner">
+          <X className="w-4 h-4 text-red-600 shrink-0" />
+          <span>{syncError}</span>
+        </div>
+      )}
 
       <div className="bg-slate-50 border border-slate-150 rounded-2xl p-4 text-xs text-slate-600 space-y-1">
         <span className="font-extrabold text-slate-700 block">💡 Dica de Integração Google / Firebase</span>
