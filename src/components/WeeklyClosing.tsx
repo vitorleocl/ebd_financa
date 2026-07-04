@@ -96,7 +96,7 @@ export default function WeeklyClosing({
   // Computations for next closing
   const getNextCycleBalances = () => {
     // Starting balance should equal the ending balance of the exact last closing
-    let startBal = 1015.00; // Seed value if first
+    let startBal = 0.00; // Seed value if first
     if (closings.length > 0) {
       const sorted = [...closings].sort((a, b) => b.endDate.localeCompare(a.endDate));
       startBal = sorted[0].endingBalance;
