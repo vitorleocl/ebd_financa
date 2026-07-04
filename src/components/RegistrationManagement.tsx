@@ -42,7 +42,7 @@ export default function RegistrationManagement({
     return `${day}/${month}/${year}`;
   };
 
-  const isSecretaryOrAdmin = currentUser?.role === 'SECRETARIA' || currentUser?.role === 'TESOUREIRO' || currentUser?.role === 'MASTER';
+  const isSecretaryOrAdmin = currentUser?.role === 'TESOUREIRO' || currentUser?.role === 'MASTER';
 
   // Filters list
   const filteredPeople = people.filter(p => {

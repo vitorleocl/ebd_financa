@@ -23,7 +23,7 @@ export default function UsersManagement({
 }: UsersManagementProps) {
   const [editingUserId, setEditingUserId] = useState<string | null>(null);
   const [editName, setEditName] = useState('');
-  const [editRole, setEditRole] = useState<UserRole>('SECRETARIA');
+  const [editRole, setEditRole] = useState<UserRole>('VISITANTE');
   
   // Local syncing states
   const [syncing, setSyncing] = useState(false);
@@ -86,7 +86,7 @@ export default function UsersManagement({
           ...u,
           name: editName.trim(),
           role: editRole,
-          avatarColor: editRole === 'MASTER' ? 'bg-indigo-900' : editRole === 'TESOUREIRO' ? 'bg-blue-600' : editRole === 'SECRETARIA' ? 'bg-indigo-600' : editRole === 'DIRIGENTE' ? 'bg-emerald-600' : 'bg-slate-500'
+          avatarColor: editRole === 'MASTER' ? 'bg-indigo-900' : editRole === 'TESOUREIRO' ? 'bg-blue-600' : editRole === 'DIRIGENTE' ? 'bg-emerald-600' : 'bg-slate-500'
         };
       }
       return u;
@@ -143,7 +143,7 @@ export default function UsersManagement({
       name: nameClean,
       username: emailClean,
       role: newRole,
-      avatarColor: newRole === 'MASTER' ? 'bg-indigo-900' : newRole === 'TESOUREIRO' ? 'bg-blue-600' : newRole === 'SECRETARIA' ? 'bg-indigo-600' : newRole === 'DIRIGENTE' ? 'bg-emerald-600' : 'bg-slate-500'
+      avatarColor: newRole === 'MASTER' ? 'bg-indigo-900' : newRole === 'TESOUREIRO' ? 'bg-blue-600' : newRole === 'DIRIGENTE' ? 'bg-emerald-600' : 'bg-slate-500'
     };
 
     const updated = [newUser, ...users];
@@ -166,8 +166,6 @@ export default function UsersManagement({
         return 'bg-purple-100 text-purple-800 border-purple-200';
       case 'TESOUREIRO':
         return 'bg-blue-100 text-blue-800 border-blue-200';
-      case 'SECRETARIA':
-        return 'bg-indigo-100 text-indigo-800 border-indigo-200';
       case 'DIRIGENTE':
         return 'bg-emerald-100 text-emerald-800 border-emerald-200';
       default:
@@ -301,7 +299,6 @@ export default function UsersManagement({
                 className="block w-full border border-slate-250 bg-white rounded-xl p-2.5 text-xs text-slate-800 font-bold outline-none focus:ring-2 focus:ring-indigo-500/20"
               >
                 <option value="VISITANTE">Visitante (Sem Permissão de Leitura ou Gravação)</option>
-                <option value="SECRETARIA">Secretária (Lançamentos & Cadastros)</option>
                 <option value="TESOUREIRO">Tesoureiro (Saldos & Fechamento)</option>
                 <option value="DIRIGENTE">Dirigente (Vistos & Auditoria Geral)</option>
                 <option value="MASTER">Master (Controle Administrativo Total)</option>
@@ -369,7 +366,6 @@ export default function UsersManagement({
                       className="border border-slate-200 rounded-lg p-1 text-[10px] bg-white font-bold outline-none text-slate-700 cursor-pointer"
                     >
                       <option value="MASTER">MASTER</option>
-                      <option value="SECRETARIA">SECRETARIA</option>
                       <option value="TESOUREIRO">TESOUREIRO</option>
                       <option value="DIRIGENTE">DIRIGENTE</option>
                       <option value="VISITANTE">VISITANTE</option>
@@ -418,7 +414,6 @@ export default function UsersManagement({
                               onChange={(e) => setEditRole(e.target.value as UserRole)}
                               className="border border-slate-200 rounded-lg p-1 px-1.5 text-xs text-slate-800 w-full bg-white font-bold outline-none"
                             >
-                              <option value="SECRETARIA">SECRETARIA</option>
                               <option value="TESOUREIRO">TESOUREIRO</option>
                               <option value="DIRIGENTE">DIRIGENTE</option>
                               <option value="MASTER">MASTER</option>

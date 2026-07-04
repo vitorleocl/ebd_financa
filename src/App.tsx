@@ -335,7 +335,7 @@ export default function App() {
             name: userDisplayName,
             username: fbUser.email || '',
             role: assignedRole,
-            avatarColor: assignedRole === 'MASTER' ? 'bg-indigo-900' : assignedRole === 'TESOUREIRO' ? 'bg-blue-600' : assignedRole === 'SECRETARIA' ? 'bg-indigo-600' : assignedRole === 'DIRIGENTE' ? 'bg-emerald-600' : 'bg-slate-500'
+            avatarColor: assignedRole === 'MASTER' ? 'bg-indigo-900' : assignedRole === 'TESOUREIRO' ? 'bg-blue-600' : assignedRole === 'DIRIGENTE' ? 'bg-emerald-600' : 'bg-slate-500'
           };
           return updatedState;
         });
@@ -466,11 +466,7 @@ export default function App() {
                 // If this is the initial login transition, route to correct default tab
                 if (!current.currentUser) {
                   setTimeout(() => {
-                    if (assignedRole === 'SECRETARIA') {
-                      setActiveTab('caixas');
-                    } else {
-                      setActiveTab('dashboard');
-                    }
+                    setActiveTab('dashboard');
                   }, 0);
                 }
 
@@ -480,7 +476,7 @@ export default function App() {
                   name: userDisplayName,
                   username: fbUser.email || '',
                   role: assignedRole,
-                  avatarColor: assignedRole === 'MASTER' ? 'bg-indigo-900' : assignedRole === 'TESOUREIRO' ? 'bg-blue-600' : assignedRole === 'SECRETARIA' ? 'bg-indigo-600' : assignedRole === 'DIRIGENTE' ? 'bg-emerald-600' : 'bg-slate-500'
+                  avatarColor: assignedRole === 'MASTER' ? 'bg-indigo-900' : assignedRole === 'TESOUREIRO' ? 'bg-blue-600' : assignedRole === 'DIRIGENTE' ? 'bg-emerald-600' : 'bg-slate-500'
                 };
 
                 // Normalize and serialize the incoming remote database state to set as the sync reference string.
@@ -546,11 +542,7 @@ export default function App() {
 
                 if (!current.currentUser) {
                   setTimeout(() => {
-                    if (assignedRole === 'SECRETARIA') {
-                      setActiveTab('caixas');
-                    } else {
-                      setActiveTab('dashboard');
-                    }
+                    setActiveTab('dashboard');
                   }, 0);
                 }
 
@@ -559,7 +551,7 @@ export default function App() {
                   name: userDisplayName,
                   username: fbUser.email || '',
                   role: assignedRole,
-                  avatarColor: assignedRole === 'MASTER' ? 'bg-indigo-900' : assignedRole === 'TESOUREIRO' ? 'bg-blue-600' : assignedRole === 'SECRETARIA' ? 'bg-indigo-600' : assignedRole === 'DIRIGENTE' ? 'bg-emerald-600' : 'bg-slate-500'
+                  avatarColor: assignedRole === 'MASTER' ? 'bg-indigo-900' : assignedRole === 'TESOUREIRO' ? 'bg-blue-600' : assignedRole === 'DIRIGENTE' ? 'bg-emerald-600' : 'bg-slate-500'
                 };
 
                 // Normalize and serialize the newly initialized state to set as the sync reference string
@@ -782,7 +774,7 @@ export default function App() {
               ...current.currentUser,
               name: userDisplayName,
               role: assignedRole,
-              avatarColor: assignedRole === 'MASTER' ? 'bg-indigo-900' : assignedRole === 'TESOUREIRO' ? 'bg-blue-600' : assignedRole === 'SECRETARIA' ? 'bg-indigo-600' : assignedRole === 'DIRIGENTE' ? 'bg-emerald-600' : 'bg-slate-500'
+              avatarColor: assignedRole === 'MASTER' ? 'bg-indigo-900' : assignedRole === 'TESOUREIRO' ? 'bg-blue-600' : assignedRole === 'DIRIGENTE' ? 'bg-emerald-600' : 'bg-slate-500'
             };
           }
 
@@ -1044,6 +1036,11 @@ export default function App() {
 
   // Transaction Visto Approval (Dirigente only)
   const handleApproveTransaction = (txId: string) => {
+    const activeRole = (simulationRole && state.currentUser?.role === 'MASTER') ? simulationRole : state.currentUser?.role;
+    if (activeRole !== 'MASTER' && activeRole !== 'DIRIGENTE') {
+      alert("Apenas usuários do tipo MASTER ou DIRIGENTE podem aprovar lançamentos.");
+      return;
+    }
     const updatedState = { ...state };
     const tx = updatedState.transactions.find(t => t.id === txId);
     
@@ -1586,16 +1583,18 @@ export default function App() {
                   Relatórios
                 </button>
 
-                <button
-                  onClick={() => setActiveTab('auditoria')}
-                  className={`px-3 py-2 rounded-xl transition-all flex items-center gap-1 ${
-                    activeTab === 'auditoria' ? 'bg-slate-800 text-indigo-300' : 'text-slate-350 hover:bg-slate-800 hover:text-white'
-                  }`}
-                  id="tab-audits"
-                >
-                  <History className="w-3.5 h-3.5" />
-                  Auditoria
-                </button>
+                {(user.role === 'TESOUREIRO' || user.role === 'MASTER' || user.role === 'DIRIGENTE') && (
+                  <button
+                    onClick={() => setActiveTab('auditoria')}
+                    className={`px-3 py-2 rounded-xl transition-all flex items-center gap-1 ${
+                      activeTab === 'auditoria' ? 'bg-slate-800 text-indigo-300' : 'text-slate-350 hover:bg-slate-800 hover:text-white'
+                    }`}
+                    id="tab-audits"
+                  >
+                    <History className="w-3.5 h-3.5" />
+                    Auditoria
+                  </button>
+                )}
 
                 {user.role === 'MASTER' && (
                   <button
@@ -1733,12 +1732,14 @@ export default function App() {
                   Relatórios
                 </button>
 
-                <button
-                  onClick={() => { setActiveTab('auditoria'); setMobileMenuOpen(false); }}
-                  className={`block w-full text-left py-2 px-3 rounded-lg ${activeTab === 'auditoria' ? 'bg-slate-800 text-indigo-300' : 'text-slate-300'}`}
-                >
-                  Auditoria
-                </button>
+                {(user.role === 'TESOUREIRO' || user.role === 'MASTER' || user.role === 'DIRIGENTE') && (
+                  <button
+                    onClick={() => { setActiveTab('auditoria'); setMobileMenuOpen(false); }}
+                    className={`block w-full text-left py-2 px-3 rounded-lg ${activeTab === 'auditoria' ? 'bg-slate-800 text-indigo-300' : 'text-slate-300'}`}
+                  >
+                    Auditoria
+                  </button>
+                )}
 
                 {user.role === 'MASTER' && (
                   <button
@@ -1869,7 +1870,7 @@ export default function App() {
                   <ShieldAlert className="w-12 h-12 text-amber-500 mx-auto mb-3" />
                   <h4 className="font-bold text-sm text-slate-800">Acesso Restrito</h4>
                   <p className="text-xs text-slate-500 mt-2 leading-relaxed">
-                    Desculpe. O preenchimento e lançamento de lançamentos financeiros só é assegurado aos cargos de <strong>Secretária</strong> ou <strong>Tesoureiro</strong>.
+                    Desculpe. O preenchimento e lançamento de lançamentos financeiros só é assegurado ao cargo de <strong>Tesoureiro</strong>.
                   </p>
                 </div>
               )
@@ -1897,7 +1898,7 @@ export default function App() {
               />
             )}
 
-            {activeTab === 'auditoria' && (
+            {activeTab === 'auditoria' && (user.role === 'TESOUREIRO' || user.role === 'MASTER' || user.role === 'DIRIGENTE') && (
               <AuditoryView logs={state.auditLogs} />
             )}
 
