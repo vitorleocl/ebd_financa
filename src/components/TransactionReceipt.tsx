@@ -179,6 +179,23 @@ export default function TransactionReceipt({ transaction, category, box, onClose
             
           </div>
 
+          {/* Attached Receipt / Attachment Photo */}
+          {transaction.attachment && (
+            <div className="pt-3 border-t border-slate-100 space-y-1.5">
+              <span className="text-xs text-slate-400 font-semibold flex items-center gap-1.5">
+                <Folder className="w-3.5 h-3.5 text-indigo-500" /> Comprovante Anexado
+              </span>
+              <div className="border border-slate-200 rounded-xl overflow-hidden bg-slate-50 p-2 text-center max-w-sm mx-auto shadow-inner">
+                <img 
+                  src={transaction.attachment} 
+                  alt="Foto do Comprovante" 
+                  className="max-h-64 object-contain mx-auto rounded-lg"
+                  referrerPolicy="no-referrer"
+                />
+              </div>
+            </div>
+          )}
+
           {/* Validation Stamp */}
           <div className="bg-slate-50 border border-indigo-100 rounded-xl px-4 py-2 flex items-center gap-2">
             <div className="w-2 h-2 rounded-full bg-indigo-600 animate-pulse" />

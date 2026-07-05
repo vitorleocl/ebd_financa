@@ -47,6 +47,7 @@ export interface Transaction {
   isApproved: boolean; // Approved by Dirigente
   approvedBy?: string;
   approvedAt?: string;
+  attachment?: string; // Base64 attached photo/receipt
 }
 
 export interface WeeklyClosing {

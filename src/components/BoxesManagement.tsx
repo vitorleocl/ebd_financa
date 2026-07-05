@@ -5,7 +5,7 @@
 
 import React, { useState } from 'react';
 import { Box, Transaction, Category, BoxId, User } from '../types';
-import { ArrowLeftRight, Landmark, Calendar, Search, ArrowUpRight, ArrowDownRight, FileText, CheckCircle, AlertCircle, Trash2 } from 'lucide-react';
+import { ArrowLeftRight, Landmark, Calendar, Search, ArrowUpRight, ArrowDownRight, FileText, CheckCircle, AlertCircle, Trash2, Paperclip } from 'lucide-react';
 import SignaturePad from './SignaturePad';
 
 interface BoxesManagementProps {
@@ -341,8 +341,11 @@ export default function BoxesManagement({
                             </span>
                           </td>
                           <td className="p-3">
-                            <p className="font-bold text-slate-700 text-[11px] max-w-[200px] truncate" title={t.description}>
+                            <p className="font-bold text-slate-700 text-[11px] max-w-[200px] truncate flex items-center gap-1" title={t.description}>
                               {t.description || 'S/D'}
+                              {t.attachment && (
+                                <Paperclip className="w-3 h-3 text-indigo-600 shrink-0" title="Possui comprovante / foto" />
+                              )}
                             </p>
                             <p className="text-[9px] text-slate-400 mt-0.5 font-semibold">Resp: {t.responsible}</p>
                           </td>

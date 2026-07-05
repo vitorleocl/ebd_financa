@@ -49,12 +49,20 @@ export function getInitialState(): AppState {
   if (saved) {
     try {
       const parsed = JSON.parse(saved);
-      // Ensure all fields are present
+      // Ensure all fields are present, and merge any new initial categories
+      let loadedCategories = parsed.categories || INITIAL_CATEGORIES;
+      if (Array.isArray(loadedCategories)) {
+        INITIAL_CATEGORIES.forEach(initCat => {
+          if (!loadedCategories.some((c: Category) => c.id === initCat.id)) {
+            loadedCategories.push(initCat);
+          }
+        });
+      }
       return {
         currentUser: parsed.currentUser || null,
         users: parsed.users || INITIAL_USERS,
         boxes: parsed.boxes || INITIAL_BOXES,
-        categories: parsed.categories || INITIAL_CATEGORIES,
+        categories: loadedCategories,
         transactions: parsed.transactions || INITIAL_TRANSACTIONS,
         people: parsed.people || INITIAL_PEOPLE,
         closings: parsed.closings || INITIAL_CLOSINGS,

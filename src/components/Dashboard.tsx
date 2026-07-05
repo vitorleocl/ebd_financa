@@ -4,7 +4,7 @@
  */
 
 import { Box, Transaction, User } from '../types';
-import { ArrowUpRight, ArrowDownRight, SquareCheck, RefreshCw, Landmark, Calendar, Clock, Lock } from 'lucide-react';
+import { ArrowUpRight, ArrowDownRight, SquareCheck, RefreshCw, Landmark, Calendar, Clock, Lock, Paperclip } from 'lucide-react';
 
 interface DashboardProps {
   boxes: Box[];
@@ -302,7 +302,12 @@ export default function Dashboard({
                       {t.type === 'ENTRADA' ? 'ENT' : 'SAÍ'}
                     </span>
                     <div className="min-w-0">
-                      <p className="font-bold text-slate-800 truncate" title={t.description}>{t.description || 'Sem descrição'}</p>
+                      <p className="font-bold text-slate-800 truncate flex items-center gap-1" title={t.description}>
+                        {t.description || 'Sem descrição'}
+                        {t.attachment && (
+                          <Paperclip className="w-3 h-3 text-indigo-500 shrink-0" title="Possui comprovante / foto" />
+                        )}
+                      </p>
                       <div className="flex items-center gap-2 mt-1 text-[10px] text-slate-400 truncate">
                         <span className="font-mono font-bold dark:text-slate-600">{t.transactionNum}</span>
                         <span>•</span>
@@ -370,8 +375,11 @@ export default function Dashboard({
                 title="Clique para ver o voucher"
               >
                 <div className="flex flex-col min-w-0 pr-3">
-                  <span className="font-bold text-slate-700 truncate group-hover:text-indigo-600 transition-colors">
+                  <span className="font-bold text-slate-700 truncate group-hover:text-indigo-600 transition-colors flex items-center gap-1">
                     {t.description || 'Sem descrição específica'}
+                    {t.attachment && (
+                      <Paperclip className="w-3 h-3 text-indigo-500 shrink-0" title="Possui comprovante / foto" />
+                    )}
                   </span>
                   <div className="flex items-center gap-2 mt-1 text-[10px] text-slate-400">
                     <span className={`font-extrabold px-1 py-0.2 rounded text-[9px] ${

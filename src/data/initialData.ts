@@ -38,7 +38,8 @@ export const INITIAL_CATEGORIES: Category[] = [
   { id: 'cat-sai-3', name: 'Alimentação (Lanche EBD)', type: 'SAIDA' },
   { id: 'cat-sai-4', name: 'Festividades/Eventos', type: 'SAIDA' },
   { id: 'cat-sai-5', name: 'Brindes e Premiações Alunos', type: 'SAIDA' },
-  { id: 'cat-sai-6', name: 'Manutenção / Decoração de Salas', type: 'SAIDA' }
+  { id: 'cat-sai-6', name: 'Manutenção / Decoração de Salas', type: 'SAIDA' },
+  { id: 'cat-sai-7', name: 'Passagens/Despesas', type: 'SAIDA' }
 ];
 
 export const INITIAL_TRANSACTIONS: Transaction[] = [];

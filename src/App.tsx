@@ -5,6 +5,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { AppState, getInitialState, saveState, recalculateBalances, addAuditLog } from './data/stateManager';
+import { INITIAL_CATEGORIES } from './data/initialData';
 import { User, BoxId, Transaction, WeeklyClosing as ClosingType, Person, UserRole, AuditLog } from './types';
 import { 
   Lock, Landmark, ArrowLeftRight, PlusCircle, CalendarRange, 
@@ -398,7 +399,14 @@ export default function App() {
                   updatedState.boxes = mergeArraysById(current.boxes || [], savedState.boxes);
                 }
                 if (savedState.categories && Array.isArray(savedState.categories)) {
-                  updatedState.categories = mergeArraysById(current.categories || [], savedState.categories);
+                  const mergedCats = mergeArraysById(current.categories || [], savedState.categories);
+                  // Ensure all INITIAL_CATEGORIES are present in the list
+                  INITIAL_CATEGORIES.forEach((initCat: any) => {
+                    if (!mergedCats.some(c => c.id === initCat.id)) {
+                      mergedCats.push(initCat);
+                    }
+                  });
+                  updatedState.categories = mergedCats;
                 }
                 if (savedState.transactions && Array.isArray(savedState.transactions)) {
                   updatedState.transactions = mergeAndSortTransactions(current.transactions || [], savedState.transactions);
@@ -995,6 +1003,7 @@ export default function App() {
     categoryId: string;
     description: string;
     signature: string;
+    attachment?: string;
   }) => {
     const updatedState = { ...state };
     
@@ -1017,7 +1026,8 @@ export default function App() {
       responsible: updatedState.currentUser?.name || 'Tesoureiro',
       signature: data.signature,
       createdAt: new Date().toISOString(),
-      isApproved: updatedState.currentUser?.role === 'TESOUREIRO' ? false : false // Requires Dirigente clearance
+      isApproved: false, // Requires Dirigente clearance
+      attachment: data.attachment
     };
 
     // Prepend to transaction array
