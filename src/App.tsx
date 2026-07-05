@@ -245,6 +245,9 @@ export default function App() {
     picture: string;
   } | null>(null);
 
+  // Cloud Firestore Error State
+  const [firebaseError, setFirebaseError] = useState<string | null>(null);
+
   // Role simulation state for Master
   const [simulationRole, setSimulationRole] = useState<UserRole | null>(null);
 
@@ -341,6 +344,7 @@ export default function App() {
             // Unblock and enable Firestore syncing once the first snapshot arrives
             hasLoadedFromFirestoreRef.current = true;
             setIsConnectingAuth(false);
+            setFirebaseError(null); // Clear any previous error on success!
 
             if (docSnap.exists()) {
               const savedState = docSnap.data();
@@ -565,9 +569,22 @@ export default function App() {
               hasLoadedFromFirestoreRef.current = true;
               setIsConnectingAuth(false);
             }
-          }, (err) => {
+          }, (err: any) => {
             console.error("Erro no listener de Firestore onSnapshot:", err);
             setIsConnectingAuth(false);
+            
+            const msg = err.message || '';
+            if (msg.includes("PERMISSION_DENIED") || msg.includes("permission-denied") || msg.includes("API has not been used")) {
+              if (msg.includes("API has not been used") || msg.includes("disabled")) {
+                setFirebaseError("API do Firestore desativada no seu Google Cloud Console. Ative para sincronizar!");
+              } else {
+                setFirebaseError("Permissão negada ao acessar o banco de dados. Crie o Firestore em modo de teste ou verifique as regras.");
+              }
+            } else if (err.code === "unavailable" || msg.includes("offline")) {
+              setFirebaseError("O Firestore está offline ou inacessível. Usando armazenamento local temporário.");
+            } else {
+              setFirebaseError(`Erro ao sincronizar Nuvem: ${msg}`);
+            }
           });
         } catch (err) {
           console.error("Erro ao sincronizar login ativo com Firestore:", err);
@@ -1503,6 +1520,49 @@ export default function App() {
           >
             Voltar para MASTER
           </button>
+        </div>
+      )}
+
+      {firebaseError && (
+        <div className="bg-red-50 border-b border-red-200 p-4 text-xs text-red-800 z-50 relative animate-fade-in no-print shadow-sm">
+          <div className="max-w-7xl mx-auto flex flex-col md:flex-row gap-4 items-start md:items-center justify-between">
+            <div className="flex gap-3 items-start">
+              <span className="p-1.5 bg-red-150 text-red-700 rounded-lg font-black text-[10px] tracking-wider uppercase shrink-0">
+                ⚠️ Erro Nuvem
+              </span>
+              <div>
+                <span className="font-extrabold block text-red-900 text-sm mb-0.5">Sincronização Desativada (Firestore Inativo)</span>
+                <span className="leading-relaxed block text-[11px] text-red-750">
+                  O Firebase reportou: <code className="font-mono bg-red-100 px-1.5 py-0.5 rounded text-red-900 border border-red-200">{firebaseError}</code>.
+                  {state.currentUser?.role === 'MASTER' ? (
+                    <span> Isso indica que a <strong>Cloud Firestore API</strong> está desativada ou que o banco de dados não foi criado no projeto <code>financas-ebd</code>. Por esse motivo, novos usuários do Google (como <strong>eduardasoares86617@gmail.com</strong>) não conseguem se registrar nem sincronizar as telas. Ative a API e crie o banco clicando nos botões ao lado!</span>
+                  ) : (
+                    <span> O aplicativo está operando em modo offline. Por favor, solicite ao Administrador Master que acesse o painel e ative a Cloud Firestore API para habilitar a sincronização multiusuário.</span>
+                  )}
+                </span>
+              </div>
+            </div>
+            {state.currentUser?.role === 'MASTER' && (
+              <div className="flex gap-2 shrink-0 self-end md:self-center">
+                <a
+                  href="https://console.developers.google.com/apis/api/firestore.googleapis.com/overview?project=financas-ebd"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="bg-red-600 hover:bg-red-700 text-white font-bold px-3 py-1.5 rounded-lg transition-colors text-[10px] uppercase tracking-wider"
+                >
+                  1. Ativar API no Console
+                </a>
+                <a
+                  href="https://console.firebase.google.com/project/financas-ebd/firestore"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="bg-slate-800 hover:bg-slate-900 text-white font-bold px-3 py-1.5 rounded-lg transition-colors text-[10px] uppercase tracking-wider"
+                >
+                  2. Criar Banco no Firebase
+                </a>
+              </div>
+            )}
+          </div>
         </div>
       )}
       
