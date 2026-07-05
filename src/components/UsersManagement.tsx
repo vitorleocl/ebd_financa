@@ -320,7 +320,9 @@ export default function UsersManagement({
 
       {/* Users table/card listings */}
       <div className="border border-slate-100 rounded-2xl overflow-hidden shadow-sm">
-        <div className="overflow-x-auto">
+        
+        {/* DESKTOP VIEW: Hidden on mobile, shown on md screens and up */}
+        <div className="hidden md:block overflow-x-auto">
           <table className="min-w-full divide-y divide-slate-100 text-left">
             <thead className="bg-slate-50/80 text-[10px] font-bold text-slate-400 uppercase tracking-wider">
               <tr>
@@ -394,7 +396,7 @@ export default function UsersManagement({
                           </div>
                         ) : (
                           <div className="flex items-center gap-3">
-                            <span className={`w-8 h-8 rounded-full ${u.avatarColor || 'bg-indigo-500'} text-white font-black text-xs flex items-center justify-center`}>
+                            <span className={`w-8 h-8 rounded-full ${u.avatarColor || 'bg-indigo-50'} text-slate-700 font-black text-xs flex items-center justify-center`}>
                               {(u.name || 'Membro').substring(0, 2).toUpperCase()}
                             </span>
                             <div>
@@ -488,6 +490,158 @@ export default function UsersManagement({
             </tbody>
           </table>
         </div>
+
+        {/* MOBILE VIEW: Shown on small screens, hidden on md and up */}
+        <div className="block md:hidden bg-slate-50/50 p-4 space-y-4">
+          
+          {/* Active Master Session Card */}
+          <div className="bg-purple-50/10 border border-purple-200/40 rounded-2xl p-4 space-y-3.5 shadow-sm">
+            <div className="flex items-start justify-between">
+              <div className="flex items-center gap-3">
+                <span className="w-9 h-9 rounded-full bg-slate-900 text-white font-black text-xs flex items-center justify-center border border-purple-200 shrink-0">
+                  VL
+                </span>
+                <div className="min-w-0">
+                  <div className="text-xs font-black text-slate-800 truncate">{currentUser.name}</div>
+                  <div className="text-[10px] font-mono text-slate-400 truncate mt-0.5">{currentUser.username}</div>
+                </div>
+              </div>
+              <span className={`inline-flex px-2 py-0.5 text-[8px] font-black tracking-wider uppercase border rounded-md shrink-0 ${getRoleBadgeColor('MASTER')}`}>
+                MASTER
+              </span>
+            </div>
+            
+            <div className="pt-2 border-t border-purple-100/30 flex items-center justify-between text-[11px]">
+              <span className="inline-flex items-center gap-1 text-[10px] text-emerald-600 font-bold">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                Sessão Ativa (Você)
+              </span>
+              
+              <div className="flex items-center gap-1">
+                <span className="text-[9px] font-bold text-slate-400 uppercase">Simular:</span>
+                <select
+                  value={simulationRole || 'MASTER'}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    onSelectSimulationRole(val === 'MASTER' ? null : val as UserRole);
+                  }}
+                  className="border border-slate-200 rounded-lg p-1 text-[10px] bg-white font-bold outline-none text-slate-700 cursor-pointer"
+                >
+                  <option value="MASTER">MASTER</option>
+                  <option value="TESOUREIRO">TESOUREIRO</option>
+                  <option value="DIRIGENTE">DIRIGENTE</option>
+                  <option value="VISITANTE">VISITANTE</option>
+                </select>
+              </div>
+            </div>
+          </div>
+
+          {/* List of other users as cards */}
+          {users
+            .filter(u => u && u.username && currentUser && currentUser.username && u.username.toLowerCase() !== currentUser.username.toLowerCase())
+            .map(u => {
+              const isEditing = editingUserId === u.id;
+
+              return (
+                <div key={u.id} className="bg-white border border-slate-100 rounded-2xl p-4 space-y-3 shadow-sm transition-all hover:border-slate-200">
+                  {isEditing ? (
+                    <div className="space-y-3">
+                      <div className="space-y-1">
+                        <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest block font-bold">Nome de exibição</label>
+                        <input
+                          type="text"
+                          value={editName}
+                          onChange={(e) => setEditName(e.target.value)}
+                          className="border border-slate-200 rounded-xl p-2 text-xs text-slate-800 block w-full bg-slate-50 font-semibold outline-none"
+                        />
+                      </div>
+                      
+                      <div className="space-y-1">
+                        <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest block font-bold">Cargo</label>
+                        <select
+                          value={editRole}
+                          onChange={(e) => setEditRole(e.target.value as UserRole)}
+                          className="border border-slate-200 rounded-xl p-2 text-xs text-slate-800 w-full bg-slate-50 font-bold outline-none"
+                        >
+                          <option value="TESOUREIRO">TESOUREIRO</option>
+                          <option value="DIRIGENTE">DIRIGENTE</option>
+                          <option value="MASTER">MASTER</option>
+                          <option value="VISITANTE">VISITANTE</option>
+                        </select>
+                      </div>
+
+                      <div className="flex gap-2 pt-1 justify-end">
+                        <button
+                          onClick={() => handleSaveEdit(u.id)}
+                          className="flex items-center gap-1 py-1.5 px-3 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-lg text-[10px] cursor-pointer"
+                        >
+                          <Check className="w-3.5 h-3.5" />
+                          Salvar
+                        </button>
+                        <button
+                          onClick={handleCancelEdit}
+                          className="flex items-center gap-1 py-1.5 px-3 bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold rounded-lg text-[10px]"
+                        >
+                          <X className="w-3.5 h-3.5" />
+                          Cancelar
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <>
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="flex items-center gap-2.5 min-w-0">
+                          <span className={`w-8 h-8 rounded-full ${u.avatarColor || 'bg-indigo-50'} text-slate-700 font-black text-xs flex items-center justify-center shrink-0`}>
+                            {(u.name || 'Membro').substring(0, 2).toUpperCase()}
+                          </span>
+                          <div className="min-w-0">
+                            <div className="text-xs font-bold text-slate-800 truncate">{u.name}</div>
+                            <div className="text-[10px] font-mono text-slate-400 truncate mt-0.5">{u.username}</div>
+                          </div>
+                        </div>
+                        
+                        <span className={`inline-flex px-1.5 py-0.5 text-[8px] font-black tracking-wider uppercase border rounded-md shrink-0 ${getRoleBadgeColor(u.role)}`}>
+                          {u.role}
+                        </span>
+                      </div>
+
+                      <div className="pt-2 border-t border-slate-50 flex items-center justify-between">
+                        <span className="inline-flex items-center gap-1.5 text-[10px] text-slate-400 font-mono">
+                          <span className="w-1.2 h-1.2 rounded-full bg-slate-350" />
+                          Pronto na Nuvem
+                        </span>
+
+                        <div className="flex gap-1.5">
+                          <button
+                            onClick={() => handleStartEdit(u)}
+                            className="flex items-center gap-1 py-1 px-2.5 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 font-bold rounded-lg text-[10px] border border-indigo-100 transition-colors cursor-pointer"
+                          >
+                            <Edit3 className="w-3 h-3" />
+                            Editar
+                          </button>
+                          <button
+                            onClick={() => handleDeleteUser(u.id)}
+                            className="flex items-center gap-1 py-1 px-2.5 bg-red-50 text-red-600 hover:bg-red-100 font-bold rounded-lg text-[10px] border border-red-100 transition-colors cursor-pointer"
+                          >
+                            <Trash2 className="w-3 h-3" />
+                            Excluir
+                          </button>
+                        </div>
+                      </div>
+                    </>
+                  )}
+                </div>
+              );
+            })}
+
+          {users.filter(u => u && u.username && currentUser && currentUser.username && u.username.toLowerCase() !== currentUser.username.toLowerCase()).length === 0 && (
+            <div className="bg-white rounded-2xl border border-slate-100 p-6 text-center text-slate-400 italic text-xs">
+              Nenhum outro usuário configurado. Clique em &ldquo;Pré-Cadastrar Usuário&rdquo; para convidar novos colaboradores da EBD.
+            </div>
+          )}
+
+        </div>
+
       </div>
 
       <div className="bg-indigo-50/50 border border-indigo-100 rounded-2xl p-4 flex gap-3 text-xs text-indigo-850">
