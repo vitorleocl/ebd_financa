@@ -130,7 +130,15 @@ const registerUserProfileInFirestore = async (fbUser: any): Promise<void> => {
 
   try {
     const docRef = doc(db, "ebd_states", "shared_church_ebd");
-    const docSnap = await getDoc(docRef);
+    
+    // Fetch latest remote document directly from the server to avoid local cache collisions
+    let docSnap;
+    try {
+      docSnap = await getDocFromServer(docRef);
+    } catch (srvErr) {
+      console.warn("getDocFromServer failed in registration, falling back to standard getDoc:", srvErr);
+      docSnap = await getDoc(docRef);
+    }
     
     let assignedRole: UserRole = 'VISITANTE';
     let displayName = fbUser.displayName || fbUser.email?.split('@')[0] || 'Membro';
@@ -168,16 +176,22 @@ const registerUserProfileInFirestore = async (fbUser: any): Promise<void> => {
         console.log(`[Firebase Register] Usuário ${emailLower} já está registrado.`);
       }
     } else {
-      console.log(`[Firebase Register] Documento não existe. Inicializando com o primeiro usuário: ${emailLower}...`);
-      const defaultState = getInitialState();
-      defaultState.users = [newUserProfile];
-      const stateToSave = {
-        ...defaultState,
-        currentUser: null,
-        updatedAt: new Date().toISOString()
-      };
-      await setDoc(docRef, stateToSave);
-      console.log(`[Firebase Register] Documento inicializado com o usuário ${emailLower}.`);
+      // If the document doesn't exist, we only call setDoc if the user registering is a MASTER user.
+      // This protects the database from accidental resets due to transient read failures.
+      if (assignedRole === 'MASTER') {
+        console.log(`[Firebase Register] Documento não existe. Inicializando com o primeiro usuário MASTER: ${emailLower}...`);
+        const defaultState = getInitialState();
+        defaultState.users = [newUserProfile];
+        const stateToSave = {
+          ...defaultState,
+          currentUser: null,
+          updatedAt: new Date().toISOString()
+        };
+        await setDoc(docRef, stateToSave);
+        console.log(`[Firebase Register] Documento inicializado com o usuário MASTER ${emailLower}.`);
+      } else {
+        console.warn(`[Firebase Register] Documento não encontrado no Firestore e o usuário não é MASTER. Ignorando inicialização para evitar riscos de sobrescrever dados.`);
+      }
     }
   } catch (err) {
     console.error(`[Firebase Register] Erro no registro de perfil para ${emailLower}:`, err);

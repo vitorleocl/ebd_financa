@@ -90,10 +90,17 @@ export async function saveStateToFirestore(userId: string, stateData: any) {
     try {
       const userDocRef = doc(db, "ebd_states", "shared_church_ebd");
       
-      // Fetch latest remote users to prevent overwriting concurrent registrations!
+      // Fetch latest remote users directly from the server to bypass stale cache and prevent overwriting concurrent registrations!
       let mergedUsers = stateData.users || [];
       try {
-        const docSnap = await getDoc(userDocRef);
+        let docSnap;
+        try {
+          docSnap = await getDocFromServer(userDocRef);
+        } catch (srvErr) {
+          console.warn("getDocFromServer failed, trying standard getDoc (cache/hybrid)...", srvErr);
+          docSnap = await getDoc(userDocRef);
+        }
+
         if (docSnap.exists()) {
           const remoteData = docSnap.data();
           const remoteUsers = remoteData.users || [];
